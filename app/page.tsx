@@ -296,11 +296,9 @@ export default function MosqRiskDashboard() {
           {/* Action Card */}
           <div className="rounded-[20px] bg-primary text-white p-6 md:p-8 relative overflow-hidden shadow-sm hover:shadow-lg transition-all duration-300 hover:-translate-y-1 group">
             <div className="absolute right-[-20%] bottom-[-20%] opacity-20 w-64 h-64 pointer-events-none">
-              <img 
-                className="w-full h-full object-contain" 
-                alt="Placeholder illustration of a modern spray bottle" 
-                src="https://lh3.googleusercontent.com/aida/AP1WRLvoVfs6ch4j0rO_TQqy33WwbBh6I-eq28DXW88k3IJRQJ6vR-pJaIGITS92kytc9XWa-mBJ8OL8vp19fKhIuxmgMk3n7CbTOIP-yPqauSYYSVgw7L4dmsHr3SQfl5K6NyhCyQOcmhXf7ReoOMHjqOLwO9wfGRh-7buN-oOrtWuUZI0Uzz_LxVQ5qZcD-37hRJdQyfjI15cICIXufOTTjAAKCmN1raxn_ugHuIqazR6EXfxuASqTfSrUI_rB"
-              />
+              <div className="w-full h-full flex items-center justify-center opacity-30">
+                <span className="material-symbols-outlined text-[200px] text-white">sanitizer</span>
+              </div>
             </div>
             <div className="relative z-10">
               <h3 className="font-headline-md text-headline-md font-semibold mb-4 flex items-center gap-2">
@@ -317,11 +315,12 @@ export default function MosqRiskDashboard() {
                 Estimasi Proteksi: {mosqRiskData ? "4" : "-"} Jam
               </div>
               {isPremium ? (
-                <button
+                <Link
+                  href="/checkout"
                   className="w-full bg-[#EAC775] text-[#1A3626] font-black py-3 md:py-4 rounded-xl flex items-center justify-center gap-2 hover:bg-[#d4b05a] transition-all duration-200 hover:scale-[1.02] active:scale-95 shadow-lg border border-yellow-400"
                 >
                   <span className="text-lg">👑</span> Beli Ulang (Diskon Premium 15%)
-                </button>
+                </Link>
               ) : (
                 <Link
                   href="/checkout"
@@ -409,11 +408,14 @@ export default function MosqRiskDashboard() {
                   </AreaChart>
                 </ResponsiveContainer>
                 {!isPremium && (
-                  <div className="absolute top-0 right-0 w-[60%] h-full bg-white/30 backdrop-blur-sm z-10 flex flex-col items-center justify-center rounded-l-3xl border-l border-white/50 shadow-[-10px_0_15px_rgba(0,0,0,0.05)]">
-                    <div className="bg-[#1A3626] p-2 md:p-3 rounded-full shadow-lg mb-2 cursor-pointer hover:scale-105 transition-transform" onClick={() => setIsPremiumAlertOpen(true)}>
+                  <div 
+                    onClick={() => setIsPremiumAlertOpen(true)}
+                    className="absolute top-0 right-0 w-[66%] h-full bg-[#F4F6F5] z-10 flex flex-col items-center justify-center rounded-l-[32px] border-l-2 border-dashed border-[#1A3626]/20 shadow-[-15px_0_25px_rgba(0,0,0,0.05)] cursor-pointer group"
+                  >
+                    <div className="bg-[#1A3626] p-2 md:p-3 rounded-full shadow-lg mb-2 group-hover:scale-105 transition-transform">
                       <span className="material-symbols-outlined text-[#EAC775] text-xl md:text-2xl">lock</span>
                     </div>
-                    <p className="text-xs md:text-sm font-black text-[#1A3626] text-center px-4">
+                    <p className="text-xs md:text-sm font-black text-[#1A3626] text-center px-4 group-hover:text-green-800 transition-colors">
                       Buka Prakiraan H+3
                       <br/>
                       <span className="font-medium text-[10px] md:text-xs text-gray-700">Khusus Pengguna Premium</span>

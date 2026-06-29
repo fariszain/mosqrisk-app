@@ -83,11 +83,9 @@ export default function CheckoutPage() {
 
         {/* Decorative Spray Silhouette (Bigger, Better Positioned) */}
         <div className="absolute right-[-10%] md:right-[0%] bottom-[-15%] opacity-40 w-[350px] h-[350px] md:w-[600px] md:h-[600px] pointer-events-none mix-blend-overlay transition-transform duration-1000 hover:scale-105">
-           <img 
-              className="w-full h-full object-contain filter drop-shadow-2xl" 
-              alt="Spray Silhouette" 
-              src="https://lh3.googleusercontent.com/aida/AP1WRLvoVfs6ch4j0rO_TQqy33WwbBh6I-eq28DXW88k3IJRQJ6vR-pJaIGITS92kytc9XWa-mBJ8OL8vp19fKhIuxmgMk3n7CbTOIP-yPqauSYYSVgw7L4dmsHr3SQfl5K6NyhCyQOcmhXf7ReoOMHjqOLwO9wfGRh-7buN-oOrtWuUZI0Uzz_LxVQ5qZcD-37hRJdQyfjI15cICIXufOTTjAAKCmN1raxn_ugHuIqazR6EXfxuASqTfSrUI_rB"
-            />
+           <div className="w-full h-full flex items-center justify-center opacity-10 filter drop-shadow-2xl">
+             <span className="material-symbols-outlined text-[300px] md:text-[500px] text-white">sanitizer</span>
+           </div>
         </div>
 
         {/* Floating Abstract Elements */}
@@ -127,11 +125,9 @@ export default function CheckoutPage() {
           {/* Square Image Card */}
           <div className="w-36 h-36 md:w-48 md:h-48 -mt-16 md:-mt-24 bg-white rounded-[2rem] p-2 shadow-xl shadow-gray-200/80 flex-shrink-0 relative overflow-hidden group">
              <div className="w-full h-full bg-gray-50 rounded-[1.5rem] flex flex-col items-center justify-center border border-gray-100 relative overflow-hidden group-hover:bg-gray-100 transition-colors duration-500">
-                <img 
-                  className="w-16 h-16 md:w-24 md:h-24 object-contain drop-shadow-sm mb-2 relative z-10 group-hover:scale-110 transition-transform duration-500" 
-                  alt="MosqRisk Logo" 
-                  src="https://lh3.googleusercontent.com/aida/AP1WRLsUymFGSRK4fo31nmuFgSDSVyEbgPNaS7doKwHIo-j_xlAJ0kBJ_YwSdpX8Q6ADlRkrGrZ9IV98uyVAZP_e_uzNl6lITDagXiLxnl3Z5iM7HvbfwxYOi1aCUymWvZ83R46ZSHiCpwrW9hnwJwAjSiDHDbb0b8N91p3C3q0AZUiD5ktO-U2KJKBZQcbmpGp1og-MxlgYPKniCLyPGdkSUT8kRjRc1-NLMFwB8JKSUgQIb4c6AQ4K27NkRa0"
-                />
+                <span className={`material-symbols-outlined text-[50px] md:text-[70px] ${textDarkGreen} drop-shadow-sm mb-2 relative z-10 group-hover:scale-110 transition-transform duration-500`} style={{fontVariationSettings: "'FILL' 1" }}>
+                  water_drop
+                </span>
                 <span className={`${textDarkGreen} font-black text-xs md:text-sm tracking-widest uppercase relative z-10`}>PATCHMOS</span>
              </div>
           </div>
@@ -329,11 +325,9 @@ export default function CheckoutPage() {
               <div className={`${darkGreen} rounded-[2rem] p-6 md:p-8 shadow-xl relative overflow-hidden text-white border border-[#2c523d]`}>
                 {/* Decorative background spray silhouette from Image 2 */}
                 <div className="absolute right-[-20%] bottom-[-20%] opacity-20 w-64 h-64 pointer-events-none">
-                   <img 
-                      className="w-full h-full object-contain" 
-                      alt="Spray Silhouette" 
-                      src="https://lh3.googleusercontent.com/aida/AP1WRLvoVfs6ch4j0rO_TQqy33WwbBh6I-eq28DXW88k3IJRQJ6vR-pJaIGITS92kytc9XWa-mBJ8OL8vp19fKhIuxmgMk3n7CbTOIP-yPqauSYYSVgw7L4dmsHr3SQfl5K6NyhCyQOcmhXf7ReoOMHjqOLwO9wfGRh-7buN-oOrtWuUZI0Uzz_LxVQ5qZcD-37hRJdQyfjI15cICIXufOTTjAAKCmN1raxn_ugHuIqazR6EXfxuASqTfSrUI_rB"
-                    />
+                   <div className="w-full h-full flex items-center justify-center opacity-10">
+                     <span className="material-symbols-outlined text-[200px] text-white">sanitizer</span>
+                   </div>
                 </div>
                 
                 <h3 className={`font-black text-lg mb-6 flex items-center gap-2 ${goldAccent} uppercase tracking-widest text-[13px]`}>
