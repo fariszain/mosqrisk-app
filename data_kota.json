@@ -1,0 +1,22 @@
+{
+  "cities": [
+    {
+      "id": "banda_aceh",
+      "name": "Banda Aceh",
+      "adm4": "11.71.03.2001",
+      "description": "Area Kampus USK/Darussalam"
+    },
+    {
+      "id": "jakarta_selatan",
+      "name": "Jakarta Selatan",
+      "adm4": "31.74.08.1004",
+      "description": "Area Kuningan/Setiabudi"
+    },
+    {
+      "id": "medan",
+      "name": "Medan",
+      "adm4": "12.71.06.1001",
+      "description": "Area Petisah Tengah"
+    }
+  ]
+}
