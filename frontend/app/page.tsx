@@ -58,9 +58,9 @@ export default function LandingPage() {
           </p>
           <div className="flex flex-col sm:flex-row items-center gap-4 animate-in slide-in-from-bottom-10 fade-in duration-700 delay-300">
             <Link href="/checkout" className="w-full sm:w-auto bg-[#1A3626] hover:bg-green-900 text-white font-bold py-4 px-10 rounded-full transition-all duration-300 shadow-xl hover:shadow-2xl hover:-translate-y-1 flex items-center justify-center gap-3 text-lg">
-              <span className="material-symbols-outlined">shopping_cart</span> Beli Patchmos
+              <span className="material-symbols-outlined text-[#EAC775]">shopping_cart</span> Beli Patchmos
             </Link>
-            <Link href="/pantau" className="w-full sm:w-auto bg-white border-2 border-gray-200 hover:border-[#1A3626] text-[#1A3626] font-bold py-4 px-10 rounded-full transition-all duration-300 hover:shadow-lg flex items-center justify-center gap-3 text-lg">
+            <Link href="/pantau" className="w-full sm:w-auto bg-white border-2 border-[#1A3626] hover:bg-[#1A3626] hover:text-white text-[#1A3626] font-bold py-4 px-10 rounded-full transition-all duration-300 shadow-xl hover:shadow-2xl hover:-translate-y-1 flex items-center justify-center gap-3 text-lg group">
               <span className="material-symbols-outlined">map</span> Coba Dasbor AI
             </Link>
           </div>
