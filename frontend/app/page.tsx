@@ -27,25 +27,25 @@ export default function LandingPage() {
         <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-[#EAC775]/10 rounded-full blur-[120px] -ml-20 -mb-20 pointer-events-none"></div>
 
         {/* Decorative Assets to fill empty sides */}
-        <div className="absolute top-[35%] right-[2%] hidden xl:block opacity-80 pointer-events-none motion-float-slow">
+        <div className={`absolute top-[35%] right-[2%] hidden xl:block opacity-80 pointer-events-none motion-float-slow transition-all duration-1000 delay-300 ease-out transform ${isMounted ? 'opacity-80 translate-x-0' : 'opacity-0 translate-x-12'}`}>
           <img src="https://lh3.googleusercontent.com/aida/AP1WRLvoVfs6ch4j0rO_TQqy33WwbBh6I-eq28DXW88k3IJRQJ6vR-pJaIGITS92kytc9XWa-mBJ8OL8vp19fKhIuxmgMk3n7CbTOIP-yPqauSYYSVgw7L4dmsHr3SQfl5K6NyhCyQOcmhXf7ReoOMHjqOLwO9wfGRh-7buN-oOrtWuUZI0Uzz_LxVQ5qZcD-37hRJdQyfjI15cICIXufOTTjAAKCmN1raxn_ugHuIqazR6EXfxuASqTfSrUI_rB" alt="" className="w-[350px] h-[350px] object-contain drop-shadow-2xl transform rotate-12" />
         </div>
-        <div className="absolute bottom-[20%] left-[3%] hidden xl:block opacity-40 pointer-events-none blur-[1px] motion-float-normal">
+        <div className={`absolute bottom-[20%] left-[3%] hidden xl:block pointer-events-none blur-[1px] motion-float-normal transition-all duration-1000 delay-500 ease-out transform ${isMounted ? 'opacity-40 -translate-x-0' : 'opacity-0 -translate-x-12'}`}>
           <img src="https://lh3.googleusercontent.com/aida/AP1WRLvoVfs6ch4j0rO_TQqy33WwbBh6I-eq28DXW88k3IJRQJ6vR-pJaIGITS92kytc9XWa-mBJ8OL8vp19fKhIuxmgMk3n7CbTOIP-yPqauSYYSVgw7L4dmsHr3SQfl5K6NyhCyQOcmhXf7ReoOMHjqOLwO9wfGRh-7buN-oOrtWuUZI0Uzz_LxVQ5qZcD-37hRJdQyfjI15cICIXufOTTjAAKCmN1raxn_ugHuIqazR6EXfxuASqTfSrUI_rB" alt="" className="w-[200px] h-[200px] object-contain drop-shadow-xl transform -rotate-12" />
         </div>
         
         {/* Floating Icons */}
-        <div className="absolute top-[20%] left-[10%] hidden lg:block opacity-[0.07] pointer-events-none text-green-900 motion-float-fast">
+        <div className={`absolute top-[20%] left-[10%] hidden lg:block pointer-events-none text-green-900 motion-float-fast transition-all duration-1000 delay-700 ease-out transform ${isMounted ? 'opacity-[0.07] scale-100' : 'opacity-0 scale-50'}`}>
           <span className="material-symbols-outlined transform -rotate-12" style={{ fontSize: '140px', fontVariationSettings: "'FILL' 1", display: 'inline-block' }}>eco</span>
         </div>
-        <div className="absolute bottom-[15%] right-[10%] hidden lg:block opacity-10 pointer-events-none text-[#EAC775] motion-float-normal">
+        <div className={`absolute bottom-[15%] right-[10%] hidden lg:block pointer-events-none text-[#EAC775] motion-float-normal transition-all duration-1000 delay-200 ease-out transform ${isMounted ? 'opacity-10 scale-100' : 'opacity-0 scale-50'}`}>
           <span className="material-symbols-outlined transform rotate-12" style={{ fontSize: '100px', fontVariationSettings: "'FILL' 1", display: 'inline-block' }}>verified_user</span>
         </div>
-        <div className="absolute top-[30%] right-[15%] hidden lg:block opacity-5 pointer-events-none text-green-900 motion-float-slow">
+        <div className={`absolute top-[30%] right-[15%] hidden lg:block pointer-events-none text-green-900 motion-float-slow transition-all duration-1000 delay-1000 ease-out transform ${isMounted ? 'opacity-5 scale-100' : 'opacity-0 scale-50'}`}>
           <span className="material-symbols-outlined" style={{ fontSize: '80px', display: 'inline-block' }}>spa</span>
         </div>
 
-        <div className="max-w-7xl mx-auto px-4 relative z-10 flex flex-col items-center text-center">
+        <div className={`max-w-7xl mx-auto px-4 relative z-10 flex flex-col items-center text-center transition-all duration-1000 ease-out transform ${isMounted ? 'opacity-100 blur-0 translate-y-0 scale-100' : 'opacity-0 blur-md translate-y-8 scale-95'}`}>
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 text-primary font-bold text-sm mb-8 animate-in slide-in-from-bottom-4 fade-in duration-500">
             <span className="material-symbols-outlined text-[18px]">verified</span>
             Resmi Terhubung AI MosqRisk BMKG
