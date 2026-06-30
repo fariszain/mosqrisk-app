@@ -68,12 +68,12 @@ export default function LaporPage() {
       <Navbar />
 
       {/* Main Form Section */}
-      <main className={`flex-grow flex items-center justify-center pt-32 pb-12 md:pt-40 md:pb-20 px-4 relative overflow-hidden transition-all duration-1000 ease-out transform ${isMounted ? 'opacity-100 blur-0 translate-y-0 scale-100' : 'opacity-0 blur-md translate-y-8 scale-95'}`}>
+      <main className="flex-grow flex items-center justify-center pt-32 pb-12 md:pt-40 md:pb-20 px-4 relative overflow-hidden">
         {/* Background Decorative Elements */}
         <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-danger/5 rounded-full blur-[100px] -mr-40 -mt-40 z-0 pointer-events-none"></div>
         <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-warning/5 rounded-full blur-[100px] -ml-20 -mb-20 z-0 pointer-events-none"></div>
 
-        <div className="max-w-6xl mx-auto w-full grid grid-cols-1 lg:grid-cols-2 gap-12 items-center z-10">
+        <div className={`max-w-6xl mx-auto w-full grid grid-cols-1 lg:grid-cols-2 gap-12 items-center z-10 transition-all duration-1000 ease-out transform ${isMounted ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-8 scale-95'}`}>
           <div>
             <div className="inline-block px-4 py-2 bg-primary/10 text-primary font-bold rounded-full mb-6 text-sm uppercase tracking-wider">
               Partisipasi Masyarakat
