@@ -27,8 +27,8 @@ export default function RevealOnScroll({ children, className = "", delay = 0 }: 
       },
       {
         root: null,
-        rootMargin: '0px',
-        threshold: 0.1, // Trigger when 10% is visible
+        rootMargin: '0px 0px -100px 0px', // Trigger when it is 100px above the bottom of the screen
+        threshold: 0,
       }
     );
 

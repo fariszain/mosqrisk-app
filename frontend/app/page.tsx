@@ -76,8 +76,8 @@ export default function LandingPage() {
           <span className="material-symbols-outlined text-[200px] text-[#EAC775]">qr_code_scanner</span>
         </div>
         
-        <RevealOnScroll className="max-w-7xl mx-auto px-4 relative z-10 grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
-          <div>
+        <RevealOnScroll className="max-w-7xl mx-auto px-4 relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-20 items-center">
+          <div className="lg:col-span-7">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#EAC775]/20 text-[#EAC775] font-bold text-xs uppercase tracking-widest mb-4">
               <span className="material-symbols-outlined text-[14px]">workspace_premium</span>
               Pusat Klaim
@@ -110,7 +110,7 @@ export default function LandingPage() {
               </>
             )}
           </div>
-          <div className="hidden md:flex justify-center relative">
+          <div className="hidden md:flex lg:col-span-5 justify-center lg:justify-end relative">
             <div className="w-72 h-72 bg-gradient-to-tr from-white/10 to-white/5 border border-white/20 rounded-3xl backdrop-blur-md shadow-2xl p-6 flex flex-col items-center justify-center rotate-3 hover:rotate-0 transition-transform duration-500">
               <div className="w-48 h-48 bg-white p-2 rounded-2xl shadow-inner mb-4 relative overflow-hidden">
                 <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJibGFjayIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiPjxwYXRoIGQ9Ik0zIDNoNnY2SDN6Ii8+PHBhdGggZD0iTTE1IDNoNnY2aC02eiIvPjxwYXRoIGQ9Ik0zIDE1aDZ2NkgzeiIvPjxwYXRoIGQ9Ik05IDN2NiIvPjxwYXRoIGQ9Ik0yMSAzdiIvPjxwYXRoIGQ9Ik0zIDlWM3Y2eiIvPjxwYXRoIGQ9Ik0yMSA5VjN2NnoiLz48cGF0aCBkPSJNOSAxNXY2Ii8+PHBhdGggZD0iTTE1IDN2NiIvPjxwYXRoIGQ9Ik0xNSAxNXY2Ii8+PHBhdGggZD0iTTMgMjF2LTZ2NnoiLz48cGF0aCBkPSJNMjEgMjF2LTZ2NnoiLz48cGF0aCBkPSJNMjEgMTV2NiIvPjwvc3ZnPg==')] opacity-20 w-full h-full bg-no-repeat bg-center bg-[length:150px_150px]"></div>
