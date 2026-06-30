@@ -27,21 +27,21 @@ export default function LandingPage() {
         <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-[#EAC775]/10 rounded-full blur-[120px] -ml-20 -mb-20 pointer-events-none"></div>
 
         {/* Decorative Assets to fill empty sides */}
-        <div className="absolute top-[35%] right-[-5%] hidden xl:block opacity-80 pointer-events-none float-slow">
+        <div className="absolute top-[35%] right-[-5%] hidden xl:block opacity-80 pointer-events-none motion-float-slow">
           <img src="https://lh3.googleusercontent.com/aida/AP1WRLvoVfs6ch4j0rO_TQqy33WwbBh6I-eq28DXW88k3IJRQJ6vR-pJaIGITS92kytc9XWa-mBJ8OL8vp19fKhIuxmgMk3n7CbTOIP-yPqauSYYSVgw7L4dmsHr3SQfl5K6NyhCyQOcmhXf7ReoOMHjqOLwO9wfGRh-7buN-oOrtWuUZI0Uzz_LxVQ5qZcD-37hRJdQyfjI15cICIXufOTTjAAKCmN1raxn_ugHuIqazR6EXfxuASqTfSrUI_rB" alt="" className="w-[350px] h-[350px] object-contain drop-shadow-2xl transform rotate-12" />
         </div>
-        <div className="absolute bottom-[20%] left-[-2%] hidden xl:block opacity-40 pointer-events-none blur-[1px] float-normal">
+        <div className="absolute bottom-[20%] left-[-2%] hidden xl:block opacity-40 pointer-events-none blur-[1px] motion-float-normal">
           <img src="https://lh3.googleusercontent.com/aida/AP1WRLvoVfs6ch4j0rO_TQqy33WwbBh6I-eq28DXW88k3IJRQJ6vR-pJaIGITS92kytc9XWa-mBJ8OL8vp19fKhIuxmgMk3n7CbTOIP-yPqauSYYSVgw7L4dmsHr3SQfl5K6NyhCyQOcmhXf7ReoOMHjqOLwO9wfGRh-7buN-oOrtWuUZI0Uzz_LxVQ5qZcD-37hRJdQyfjI15cICIXufOTTjAAKCmN1raxn_ugHuIqazR6EXfxuASqTfSrUI_rB" alt="" className="w-[200px] h-[200px] object-contain drop-shadow-xl transform -rotate-12" />
         </div>
         
         {/* Floating Icons */}
-        <div className="absolute top-[20%] left-[10%] hidden lg:block opacity-[0.07] pointer-events-none text-green-900 float-fast">
+        <div className="absolute top-[20%] left-[10%] hidden lg:block opacity-[0.07] pointer-events-none text-green-900 motion-float-fast">
           <span className="material-symbols-outlined transform -rotate-12" style={{ fontSize: '140px', fontVariationSettings: "'FILL' 1", display: 'inline-block' }}>eco</span>
         </div>
-        <div className="absolute bottom-[15%] right-[10%] hidden lg:block opacity-10 pointer-events-none text-[#EAC775] float-normal">
+        <div className="absolute bottom-[15%] right-[10%] hidden lg:block opacity-10 pointer-events-none text-[#EAC775] motion-float-normal">
           <span className="material-symbols-outlined transform rotate-12" style={{ fontSize: '100px', fontVariationSettings: "'FILL' 1", display: 'inline-block' }}>verified_user</span>
         </div>
-        <div className="absolute top-[30%] right-[15%] hidden lg:block opacity-5 pointer-events-none text-green-900 float-slow">
+        <div className="absolute top-[30%] right-[15%] hidden lg:block opacity-5 pointer-events-none text-green-900 motion-float-slow">
           <span className="material-symbols-outlined" style={{ fontSize: '80px', display: 'inline-block' }}>spa</span>
         </div>
 

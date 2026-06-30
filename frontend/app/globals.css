@@ -45,14 +45,14 @@ body {
   50% { transform: translateY(-20px); }
 }
 
-.float-fast {
+.motion-float-fast {
   animation: float-up-down 4s ease-in-out infinite;
 }
-.float-normal {
+.motion-float-normal {
   animation: float-up-down 6s ease-in-out infinite;
   animation-delay: 1s;
 }
-.float-slow {
+.motion-float-slow {
   animation: float-up-down 8s ease-in-out infinite;
   animation-delay: 2s;
 }
