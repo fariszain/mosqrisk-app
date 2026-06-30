@@ -22,27 +22,27 @@ export default function LandingPage() {
       <Navbar />
 
       {/* Hero Section */}
-      <section className="relative pt-32 pb-20 lg:pt-40 lg:pb-32 overflow-hidden bg-gradient-to-b from-surface-container-low to-background">
+      <section className="relative min-h-[100vh] flex flex-col justify-center pt-32 pb-20 lg:pt-0 lg:pb-0 overflow-hidden bg-gradient-to-b from-surface-container-low to-background">
         <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-primary/5 rounded-full blur-[120px] -mr-40 -mt-40 pointer-events-none"></div>
         <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-[#EAC775]/10 rounded-full blur-[120px] -ml-20 -mb-20 pointer-events-none"></div>
 
         {/* Decorative Assets to fill empty sides */}
-        <div className="absolute top-[35%] right-[-5%] hidden xl:block opacity-80 pointer-events-none transform rotate-12">
-          <img src="https://lh3.googleusercontent.com/aida/AP1WRLvoVfs6ch4j0rO_TQqy33WwbBh6I-eq28DXW88k3IJRQJ6vR-pJaIGITS92kytc9XWa-mBJ8OL8vp19fKhIuxmgMk3n7CbTOIP-yPqauSYYSVgw7L4dmsHr3SQfl5K6NyhCyQOcmhXf7ReoOMHjqOLwO9wfGRh-7buN-oOrtWuUZI0Uzz_LxVQ5qZcD-37hRJdQyfjI15cICIXufOTTjAAKCmN1raxn_ugHuIqazR6EXfxuASqTfSrUI_rB" alt="" className="w-[350px] h-[350px] object-contain drop-shadow-2xl" />
+        <div className="absolute top-[35%] right-[-5%] hidden xl:block opacity-80 pointer-events-none float-slow">
+          <img src="https://lh3.googleusercontent.com/aida/AP1WRLvoVfs6ch4j0rO_TQqy33WwbBh6I-eq28DXW88k3IJRQJ6vR-pJaIGITS92kytc9XWa-mBJ8OL8vp19fKhIuxmgMk3n7CbTOIP-yPqauSYYSVgw7L4dmsHr3SQfl5K6NyhCyQOcmhXf7ReoOMHjqOLwO9wfGRh-7buN-oOrtWuUZI0Uzz_LxVQ5qZcD-37hRJdQyfjI15cICIXufOTTjAAKCmN1raxn_ugHuIqazR6EXfxuASqTfSrUI_rB" alt="" className="w-[350px] h-[350px] object-contain drop-shadow-2xl transform rotate-12" />
         </div>
-        <div className="absolute bottom-[20%] left-[-2%] hidden xl:block opacity-40 pointer-events-none transform -rotate-12 blur-[1px]">
-          <img src="https://lh3.googleusercontent.com/aida/AP1WRLvoVfs6ch4j0rO_TQqy33WwbBh6I-eq28DXW88k3IJRQJ6vR-pJaIGITS92kytc9XWa-mBJ8OL8vp19fKhIuxmgMk3n7CbTOIP-yPqauSYYSVgw7L4dmsHr3SQfl5K6NyhCyQOcmhXf7ReoOMHjqOLwO9wfGRh-7buN-oOrtWuUZI0Uzz_LxVQ5qZcD-37hRJdQyfjI15cICIXufOTTjAAKCmN1raxn_ugHuIqazR6EXfxuASqTfSrUI_rB" alt="" className="w-[200px] h-[200px] object-contain drop-shadow-xl" />
+        <div className="absolute bottom-[20%] left-[-2%] hidden xl:block opacity-40 pointer-events-none blur-[1px] float-normal">
+          <img src="https://lh3.googleusercontent.com/aida/AP1WRLvoVfs6ch4j0rO_TQqy33WwbBh6I-eq28DXW88k3IJRQJ6vR-pJaIGITS92kytc9XWa-mBJ8OL8vp19fKhIuxmgMk3n7CbTOIP-yPqauSYYSVgw7L4dmsHr3SQfl5K6NyhCyQOcmhXf7ReoOMHjqOLwO9wfGRh-7buN-oOrtWuUZI0Uzz_LxVQ5qZcD-37hRJdQyfjI15cICIXufOTTjAAKCmN1raxn_ugHuIqazR6EXfxuASqTfSrUI_rB" alt="" className="w-[200px] h-[200px] object-contain drop-shadow-xl transform -rotate-12" />
         </div>
         
         {/* Floating Icons */}
-        <div className="absolute top-[20%] left-[10%] hidden lg:block opacity-[0.07] pointer-events-none text-green-900 transform -rotate-12">
-          <span className="material-symbols-outlined" style={{ fontSize: '140px', fontVariationSettings: "'FILL' 1" }}>eco</span>
+        <div className="absolute top-[20%] left-[10%] hidden lg:block opacity-[0.07] pointer-events-none text-green-900 float-fast">
+          <span className="material-symbols-outlined transform -rotate-12" style={{ fontSize: '140px', fontVariationSettings: "'FILL' 1", display: 'inline-block' }}>eco</span>
         </div>
-        <div className="absolute bottom-[15%] right-[10%] hidden lg:block opacity-10 pointer-events-none text-[#EAC775] transform rotate-12">
-          <span className="material-symbols-outlined" style={{ fontSize: '100px', fontVariationSettings: "'FILL' 1" }}>verified_user</span>
+        <div className="absolute bottom-[15%] right-[10%] hidden lg:block opacity-10 pointer-events-none text-[#EAC775] float-normal">
+          <span className="material-symbols-outlined transform rotate-12" style={{ fontSize: '100px', fontVariationSettings: "'FILL' 1", display: 'inline-block' }}>verified_user</span>
         </div>
-        <div className="absolute top-[30%] right-[15%] hidden lg:block opacity-5 pointer-events-none text-green-900">
-          <span className="material-symbols-outlined" style={{ fontSize: '80px' }}>spa</span>
+        <div className="absolute top-[30%] right-[15%] hidden lg:block opacity-5 pointer-events-none text-green-900 float-slow">
+          <span className="material-symbols-outlined" style={{ fontSize: '80px', display: 'inline-block' }}>spa</span>
         </div>
 
         <div className="max-w-7xl mx-auto px-4 relative z-10 flex flex-col items-center text-center">

@@ -39,3 +39,20 @@ body {
   color: var(--on-surface);
   font-family: 'Plus Jakarta Sans', Arial, Helvetica, sans-serif;
 }
+
+@keyframes float-up-down {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-20px); }
+}
+
+.float-fast {
+  animation: float-up-down 4s ease-in-out infinite;
+}
+.float-normal {
+  animation: float-up-down 6s ease-in-out infinite;
+  animation-delay: 1s;
+}
+.float-slow {
+  animation: float-up-down 8s ease-in-out infinite;
+  animation-delay: 2s;
+}
