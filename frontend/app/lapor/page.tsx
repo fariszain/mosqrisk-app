@@ -35,7 +35,7 @@ export default function LaporPage() {
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
-    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
     fetch(`${API_URL}/api/reports`, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},

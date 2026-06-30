@@ -33,7 +33,7 @@ export default function MosqRiskDashboard() {
     }
     
     // Fetch dynamic impact stats
-    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
+    const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
     fetch(`${API_URL}/api/stats`)
       .then(res => res.json())
       .then(data => {
@@ -52,7 +52,7 @@ export default function MosqRiskDashboard() {
     setWaError('');
     setWaSuccess('');
     try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
       const res = await fetch(`${API_URL}/api/subscribe`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -198,7 +198,7 @@ export default function MosqRiskDashboard() {
         if (!adm4) throw new Error("Data wilayah tidak didukung oleh BMKG.");
         
         // Hit Backend FastAPI
-        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
         const backendRes = await fetch(`${API_URL}/api/mosqrisk?adm4=${adm4}`);
         const backendData = await backendRes.json();
         

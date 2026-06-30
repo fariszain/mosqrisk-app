@@ -18,7 +18,7 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     if (!isAuthenticated) return;
-    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
+    const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
     Promise.all([
       fetch(`${API_URL}/api/reports`).then(res => res.json()),
       fetch(`${API_URL}/api/subscribe`).then(res => res.json())
@@ -55,7 +55,7 @@ export default function AdminDashboard() {
     
     setIsBroadcasting(true);
     try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
       const res = await fetch(`${API_URL}/api/broadcast?key=kemenkes123`, { method: 'POST' });
       const data = await res.json();
       if (data.success) {
