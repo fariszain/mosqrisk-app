@@ -27,10 +27,10 @@ export default function LandingPage() {
         <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-[#EAC775]/10 rounded-full blur-[120px] -ml-20 -mb-20 pointer-events-none"></div>
 
         {/* Decorative Assets to fill empty sides */}
-        <div className="absolute top-[35%] right-[-5%] hidden xl:block opacity-80 pointer-events-none motion-float-slow">
+        <div className="absolute top-[35%] right-[2%] hidden xl:block opacity-80 pointer-events-none motion-float-slow">
           <img src="https://lh3.googleusercontent.com/aida/AP1WRLvoVfs6ch4j0rO_TQqy33WwbBh6I-eq28DXW88k3IJRQJ6vR-pJaIGITS92kytc9XWa-mBJ8OL8vp19fKhIuxmgMk3n7CbTOIP-yPqauSYYSVgw7L4dmsHr3SQfl5K6NyhCyQOcmhXf7ReoOMHjqOLwO9wfGRh-7buN-oOrtWuUZI0Uzz_LxVQ5qZcD-37hRJdQyfjI15cICIXufOTTjAAKCmN1raxn_ugHuIqazR6EXfxuASqTfSrUI_rB" alt="" className="w-[350px] h-[350px] object-contain drop-shadow-2xl transform rotate-12" />
         </div>
-        <div className="absolute bottom-[20%] left-[-2%] hidden xl:block opacity-40 pointer-events-none blur-[1px] motion-float-normal">
+        <div className="absolute bottom-[20%] left-[3%] hidden xl:block opacity-40 pointer-events-none blur-[1px] motion-float-normal">
           <img src="https://lh3.googleusercontent.com/aida/AP1WRLvoVfs6ch4j0rO_TQqy33WwbBh6I-eq28DXW88k3IJRQJ6vR-pJaIGITS92kytc9XWa-mBJ8OL8vp19fKhIuxmgMk3n7CbTOIP-yPqauSYYSVgw7L4dmsHr3SQfl5K6NyhCyQOcmhXf7ReoOMHjqOLwO9wfGRh-7buN-oOrtWuUZI0Uzz_LxVQ5qZcD-37hRJdQyfjI15cICIXufOTTjAAKCmN1raxn_ugHuIqazR6EXfxuASqTfSrUI_rB" alt="" className="w-[200px] h-[200px] object-contain drop-shadow-xl transform -rotate-12" />
         </div>
         
