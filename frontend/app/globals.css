@@ -56,3 +56,8 @@ body {
   animation: float-up-down 8s ease-in-out infinite;
   animation-delay: 2s;
 }
+
+@keyframes scan {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(180px); }
+}
