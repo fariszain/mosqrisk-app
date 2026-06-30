@@ -5,6 +5,7 @@ import Link from 'next/link';
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import ClaimModal from "@/components/ClaimModal";
+import RevealOnScroll from "@/components/RevealOnScroll";
 
 export default function LandingPage() {
   const [claimModalOpen, setClaimModalOpen] = useState(false);
@@ -75,7 +76,7 @@ export default function LandingPage() {
           <span className="material-symbols-outlined text-[200px] text-[#EAC775]">qr_code_scanner</span>
         </div>
         
-        <div className="max-w-7xl mx-auto px-4 relative z-10 grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
+        <RevealOnScroll className="max-w-7xl mx-auto px-4 relative z-10 grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
           <div>
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#EAC775]/20 text-[#EAC775] font-bold text-xs uppercase tracking-widest mb-4">
               <span className="material-symbols-outlined text-[14px]">workspace_premium</span>
@@ -118,12 +119,12 @@ export default function LandingPage() {
               <p className="font-mono text-[#EAC775] font-bold tracking-widest text-lg">MOSQ-XXXX</p>
             </div>
           </div>
-        </div>
+        </RevealOnScroll>
       </section>
 
       {/* Tiga Pilar Utama - Phom Inspired */}
       <section className="py-24 bg-white">
-        <div className="max-w-7xl mx-auto px-4">
+        <RevealOnScroll className="max-w-7xl mx-auto px-4">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-16 items-center">
             {/* Left Content */}
             <div className="lg:col-span-5 text-left">
@@ -166,12 +167,12 @@ export default function LandingPage() {
               </div>
             </div>
           </div>
-        </div>
+        </RevealOnScroll>
       </section>
 
       {/* Simulasi Testimoni & Review */}
       <section className="py-20 bg-surface-container-lowest">
-        <div className="max-w-7xl mx-auto px-4 text-center">
+        <RevealOnScroll className="max-w-7xl mx-auto px-4 text-center">
           <h2 className="text-3xl md:text-4xl font-bold text-primary mb-12">Apa Kata Mereka?</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             <div className="bg-white p-8 rounded-3xl shadow-md border border-gray-100 text-left relative">
@@ -228,7 +229,7 @@ export default function LandingPage() {
               </div>
             </div>
           </div>
-        </div>
+        </RevealOnScroll>
       </section>
 
       {/* Footer */}
