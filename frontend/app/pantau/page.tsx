@@ -225,7 +225,7 @@ export default function MosqRiskDashboard() {
   }, [selectedReg, regencies]);
 
   return (
-    <div className="max-w-7xl mx-auto w-full px-3 sm:px-6 lg:px-8 flex flex-col min-h-screen pt-28 md:pt-32 font-['Plus_Jakarta_Sans'] antialiased">
+    <div className="w-full flex flex-col min-h-screen pt-28 md:pt-32 font-['Plus_Jakarta_Sans'] antialiased">
       {/* Navigation Bar */}
       <Navbar rightAction={
         <button 
@@ -247,7 +247,7 @@ export default function MosqRiskDashboard() {
       } />
 
       {/* Main Content */}
-      <div className={`w-full flex-grow flex flex-col transition-all duration-1000 ease-out transform ${isMounted ? 'opacity-100 blur-0 translate-y-0 scale-100' : 'opacity-0 blur-md translate-y-8 scale-95'}`}>
+      <div className={`max-w-7xl mx-auto w-full px-3 sm:px-6 lg:px-8 flex-grow flex flex-col transition-all duration-1000 ease-out transform ${isMounted ? 'opacity-100 blur-0 translate-y-0 scale-100' : 'opacity-0 blur-md translate-y-8 scale-95'}`}>
         <main id="pantau" className="flex-grow pt-4 pb-8 w-full grid grid-cols-1 lg:grid-cols-12 gap-8">
           {/* Main Dashboard Segment */}
           
