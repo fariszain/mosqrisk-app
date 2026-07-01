@@ -34,7 +34,7 @@ export default function Navbar({ rightAction }: NavbarProps) {
           <img 
             className="h-8 object-contain transition-transform group-hover:scale-105" 
             alt="MosqRisk Logo" 
-            src="https://lh3.googleusercontent.com/aida/AP1WRLsUymFGSRK4fo31nmuFgSDSVyEbgPNaS7doKwHIo-j_xlAJ0kBJ_YwSdpX8Q6ADlRkrGrZ9IV98uyVAZP_e_uzNl6lITDagXiLxnl3Z5iM7HvbfwxYOi1aCUymWvZ83R46ZSHiCpwrW9hnwJwAjSiDHDbb0b8N91p3C3q0AZUiD5ktO-U2KJKBZQcbmpGp1og-MxlgYPKniCLyPGdkSUT8kRjRc1-NLMFwB8JKSUgQIb4c6AQ4K27NkRa0"
+            src="/logonavbar.png"
             onError={(e) => {
               e.currentTarget.style.display = 'none';
               e.currentTarget.nextElementSibling?.classList.remove('hidden');

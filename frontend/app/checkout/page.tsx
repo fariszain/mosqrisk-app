@@ -86,7 +86,7 @@ export default function CheckoutPage() {
            <img 
               className="w-full h-full object-contain filter drop-shadow-2xl" 
               alt="Spray Silhouette" 
-              src="https://lh3.googleusercontent.com/aida/AP1WRLvoVfs6ch4j0rO_TQqy33WwbBh6I-eq28DXW88k3IJRQJ6vR-pJaIGITS92kytc9XWa-mBJ8OL8vp19fKhIuxmgMk3n7CbTOIP-yPqauSYYSVgw7L4dmsHr3SQfl5K6NyhCyQOcmhXf7ReoOMHjqOLwO9wfGRh-7buN-oOrtWuUZI0Uzz_LxVQ5qZcD-37hRJdQyfjI15cICIXufOTTjAAKCmN1raxn_ugHuIqazR6EXfxuASqTfSrUI_rB"
+              src="/spray-square-white.png"
             />
         </div>
 
@@ -211,7 +211,7 @@ export default function CheckoutPage() {
                   {/* Background Bottle Image Container */}
                   <div className="absolute inset-0 overflow-hidden rounded-[14px] pointer-events-none">
                     <div className={`absolute right-[-20%] bottom-[-25%] w-32 h-32 pointer-events-none transition-all duration-500 ease-in-out mix-blend-screen ${quantity === 1 ? 'opacity-20 scale-100 translate-x-0' : 'opacity-0 scale-90 translate-x-4'}`}>
-                      <img src="https://lh3.googleusercontent.com/aida/AP1WRLvoVfs6ch4j0rO_TQqy33WwbBh6I-eq28DXW88k3IJRQJ6vR-pJaIGITS92kytc9XWa-mBJ8OL8vp19fKhIuxmgMk3n7CbTOIP-yPqauSYYSVgw7L4dmsHr3SQfl5K6NyhCyQOcmhXf7ReoOMHjqOLwO9wfGRh-7buN-oOrtWuUZI0Uzz_LxVQ5qZcD-37hRJdQyfjI15cICIXufOTTjAAKCmN1raxn_ugHuIqazR6EXfxuASqTfSrUI_rB" alt="" className="w-full h-full object-contain filter drop-shadow-md" />
+                      <img src="/spray-square-white.png" alt="" className="w-full h-full object-contain filter drop-shadow-md" />
                     </div>
                   </div>
 
@@ -232,7 +232,7 @@ export default function CheckoutPage() {
                   {/* Background Bottle Image Container */}
                   <div className="absolute inset-0 overflow-hidden rounded-[14px] pointer-events-none">
                     <div className={`absolute right-[-20%] bottom-[-25%] w-32 h-32 pointer-events-none transition-all duration-500 ease-in-out mix-blend-screen ${quantity === 2 ? 'opacity-20 scale-100 translate-x-0' : 'opacity-0 scale-90 translate-x-4'}`}>
-                      <img src="https://lh3.googleusercontent.com/aida/AP1WRLvoVfs6ch4j0rO_TQqy33WwbBh6I-eq28DXW88k3IJRQJ6vR-pJaIGITS92kytc9XWa-mBJ8OL8vp19fKhIuxmgMk3n7CbTOIP-yPqauSYYSVgw7L4dmsHr3SQfl5K6NyhCyQOcmhXf7ReoOMHjqOLwO9wfGRh-7buN-oOrtWuUZI0Uzz_LxVQ5qZcD-37hRJdQyfjI15cICIXufOTTjAAKCmN1raxn_ugHuIqazR6EXfxuASqTfSrUI_rB" alt="" className="w-full h-full object-contain filter drop-shadow-md" />
+                      <img src="/spray-square-white.png" alt="" className="w-full h-full object-contain filter drop-shadow-md" />
                     </div>
                   </div>
 
@@ -255,7 +255,7 @@ export default function CheckoutPage() {
                   {/* Background Bottle Image Container */}
                   <div className="absolute inset-0 overflow-hidden rounded-[14px] pointer-events-none">
                     <div className={`absolute right-[-20%] bottom-[-25%] w-32 h-32 pointer-events-none transition-all duration-500 ease-in-out mix-blend-screen ${quantity === 3 ? 'opacity-20 scale-100 translate-x-0' : 'opacity-0 scale-90 translate-x-4'}`}>
-                      <img src="https://lh3.googleusercontent.com/aida/AP1WRLvoVfs6ch4j0rO_TQqy33WwbBh6I-eq28DXW88k3IJRQJ6vR-pJaIGITS92kytc9XWa-mBJ8OL8vp19fKhIuxmgMk3n7CbTOIP-yPqauSYYSVgw7L4dmsHr3SQfl5K6NyhCyQOcmhXf7ReoOMHjqOLwO9wfGRh-7buN-oOrtWuUZI0Uzz_LxVQ5qZcD-37hRJdQyfjI15cICIXufOTTjAAKCmN1raxn_ugHuIqazR6EXfxuASqTfSrUI_rB" alt="" className="w-full h-full object-contain filter drop-shadow-md" />
+                      <img src="/spray-square-white.png" alt="" className="w-full h-full object-contain filter drop-shadow-md" />
                     </div>
                   </div>
 
@@ -345,13 +345,13 @@ export default function CheckoutPage() {
               </div>
 
               {/* Order Summary Card - EXACTLY LIKE MOSQRISK CARD (Image 2) */}
-              <div className={`${darkGreen} rounded-[2rem] p-6 md:p-8 shadow-xl relative overflow-hidden text-white border border-[#2c523d]`}>
+              <div className={`${darkGreen} rounded-[2.5rem] p-6 md:p-8 shadow-xl relative overflow-hidden text-white border border-[#2c523d]`}>
                 {/* Decorative background spray silhouette from Image 2 */}
-                <div className="absolute right-[-20%] bottom-[-20%] opacity-20 w-64 h-64 pointer-events-none">
+                <div className="absolute right-[-20%] bottom-[-20%] opacity-20 w-64 h-64 pointer-events-none mix-blend-screen">
                    <img 
                       className="w-full h-full object-contain" 
                       alt="Spray Silhouette" 
-                      src="https://lh3.googleusercontent.com/aida/AP1WRLvoVfs6ch4j0rO_TQqy33WwbBh6I-eq28DXW88k3IJRQJ6vR-pJaIGITS92kytc9XWa-mBJ8OL8vp19fKhIuxmgMk3n7CbTOIP-yPqauSYYSVgw7L4dmsHr3SQfl5K6NyhCyQOcmhXf7ReoOMHjqOLwO9wfGRh-7buN-oOrtWuUZI0Uzz_LxVQ5qZcD-37hRJdQyfjI15cICIXufOTTjAAKCmN1raxn_ugHuIqazR6EXfxuASqTfSrUI_rB"
+                      src="/spray-square-white.png"
                     />
                 </div>
                 
@@ -380,13 +380,13 @@ export default function CheckoutPage() {
                   </div>
                 </div>
                 
-                <div className="pt-6 border-t border-white/20 border-dashed flex justify-between items-end mb-8 relative z-10">
+                <div className="pt-6 border-t border-white/20 border-dashed flex justify-between items-center mb-8 relative z-10">
                   <p className="font-bold text-gray-300 text-sm">Total Tagihan</p>
                   <p className={`font-black text-3xl ${goldAccent}`}>Rp {(totalPrice + (paymentMethod === "QRIS" ? 0 : 1000)).toLocaleString('id-ID')}</p>
                 </div>
 
                 {/* White button exactly like Image 2 */}
-                <button type="submit" className="w-full bg-white text-[#1A3626] font-black text-lg py-4 rounded-[1rem] transition-all duration-300 shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-95 flex justify-center items-center gap-3 relative z-10">
+                <button type="submit" className="w-full bg-white text-[#1A3626] font-black text-lg py-4 rounded-[2rem] transition-all duration-300 shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-95 flex justify-center items-center gap-3 relative z-10">
                   <span className="material-symbols-outlined text-[#1A3626]">shopping_cart</span>
                   Beli Patchmos Spray
                 </button>

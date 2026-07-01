@@ -342,12 +342,12 @@ export default function MosqRiskDashboard() {
               <span className="material-symbols-outlined text-[150px] text-[#EAC775]">shield_with_heart</span>
             </div>
 
-            {/* Restored Spray Bottle Image */}
+            {/* Background Spray Silhouette */}
             <div className="absolute right-[-10%] bottom-[-15%] opacity-40 w-48 h-48 md:w-64 md:h-64 pointer-events-none z-0 transition-transform duration-500 group-hover:scale-110 mix-blend-screen">
               <img 
                 className="w-full h-full object-contain filter drop-shadow-[0_0_15px_rgba(234,199,117,0.3)]" 
                 alt="Botol Patchmos" 
-                src="https://lh3.googleusercontent.com/aida/AP1WRLvoVfs6ch4j0rO_TQqy33WwbBh6I-eq28DXW88k3IJRQJ6vR-pJaIGITS92kytc9XWa-mBJ8OL8vp19fKhIuxmgMk3n7CbTOIP-yPqauSYYSVgw7L4dmsHr3SQfl5K6NyhCyQOcmhXf7ReoOMHjqOLwO9wfGRh-7buN-oOrtWuUZI0Uzz_LxVQ5qZcD-37hRJdQyfjI15cICIXufOTTjAAKCmN1raxn_ugHuIqazR6EXfxuASqTfSrUI_rB"
+                src="/spray-square-white.png"
               />
             </div>
 
