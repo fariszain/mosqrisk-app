@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { toast } from 'react-hot-toast';
 
 export default function AdminDashboard() {
   const [reports, setReports] = useState<any[]>([]);
@@ -18,34 +19,74 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     if (!isAuthenticated) return;
+    
+    setLoading(true);
     const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+    const headers = { 'Authorization': `Bearer ${pin}` };
+
     Promise.all([
-      fetch(`${API_URL}/api/reports`).then(res => res.json()),
-      fetch(`${API_URL}/api/subscribe`).then(res => res.json())
+      fetch(`${API_URL}/api/reports`, { headers }).then(async res => {
+        const text = await res.text();
+        try {
+          return { status: res.status, ok: res.ok, data: JSON.parse(text) };
+        } catch {
+          return { status: res.status, ok: res.ok, text };
+        }
+      }),
+      fetch(`${API_URL}/api/subscribe`, { headers }).then(async res => {
+        const text = await res.text();
+        try {
+          return { status: res.status, ok: res.ok, data: JSON.parse(text) };
+        } catch {
+          return { status: res.status, ok: res.ok, text };
+        }
+      })
     ])
-    .then(([reportsData, subsData]) => {
-      if(reportsData.success && reportsData.data) {
-        setReports(reportsData.data);
+    .then(([reportsRes, subsRes]) => {
+      if(reportsRes.ok && reportsRes.data?.success) {
+        setReports(reportsRes.data.data || []);
+      } else {
+        console.error("Gagal load reports:", reportsRes);
+        toast.error("Gagal memuat laporan");
       }
-      if(subsData.success && subsData.data) {
-        setSubscribers(subsData.data);
+      
+      if(subsRes.ok && subsRes.data?.success) {
+        setSubscribers(subsRes.data.data || []);
+      } else {
+        console.error("Gagal load subscribers:", subsRes);
+        toast.error("Gagal memuat data pelanggan");
       }
     })
-    .catch(err => console.error(err))
+    .catch(err => {
+      console.error("Fetch error:", err);
+      toast.error("Error jaringan saat memuat data");
+    })
     .finally(() => setLoading(false));
-  }, [isAuthenticated]);
+  }, [isAuthenticated, pin]);
 
   const totalReports = reports.length;
-  const dbdCases = reports.filter(r => r.report_type === 'DBD').length;
-  const nyamukCases = reports.filter(r => r.report_type === 'JENTIK').length;
+  const dbdCases = reports.filter(r => r.report_type?.toUpperCase() === 'DBD').length;
+  const nyamukCases = reports.filter(r => r.report_type?.toUpperCase() === 'JENTIK').length;
   const totalSubscribers = subscribers.length;
   
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (pin === 'kemenkes123') {
-      setIsAuthenticated(true);
-      setPinError(false);
-    } else {
+    try {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+      const res = await fetch(`${API_URL}/api/admin/verify`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${pin}` }
+      });
+      const data = await res.json();
+      
+      if (res.ok && data.success) {
+        setIsAuthenticated(true);
+        setPinError(false);
+      } else {
+        setPinError(true);
+      }
+    } catch (err) {
+      console.error(err);
       setPinError(true);
     }
   };
@@ -56,15 +97,18 @@ export default function AdminDashboard() {
     setIsBroadcasting(true);
     try {
       const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
-      const res = await fetch(`${API_URL}/api/broadcast?key=kemenkes123`, { method: 'POST' });
+      const res = await fetch(`${API_URL}/api/broadcast`, { 
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${pin}` }
+      });
       const data = await res.json();
       if (data.success) {
-        alert('✅ Broadcast Peringatan berhasil dikirim ke ' + data.sent_count + ' warga!');
+        toast.success('Broadcast Peringatan berhasil dijadwalkan!');
       } else {
-        alert('❌ Gagal: ' + data.message);
+        toast.error('Gagal: ' + data.message);
       }
     } catch (err) {
-      alert('❌ Error koneksi ke server.');
+      toast.error('Error koneksi ke server.');
     } finally {
       setIsBroadcasting(false);
     }
@@ -81,6 +125,58 @@ export default function AdminDashboard() {
     a.download = filename;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const handleDeleteReport = async (id: number) => {
+    if (!confirm('Hapus laporan ini permanen?')) return;
+    
+    // Optimistic Update
+    const previousReports = [...reports];
+    setReports(reports.filter(r => r.id !== id));
+    
+    try {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+      const res = await fetch(`${API_URL}/api/reports/${id}`, { 
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${pin}` }
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success('Laporan berhasil dihapus');
+      } else {
+        setReports(previousReports);
+        toast.error('Gagal menghapus laporan: ' + data.message);
+      }
+    } catch (err) {
+      setReports(previousReports);
+      toast.error('Error koneksi ke server.');
+    }
+  };
+
+  const handleDeleteSubscriber = async (id: number) => {
+    if (!confirm('Hapus pelanggan email ini permanen?')) return;
+    
+    // Optimistic Update
+    const previousSubscribers = [...subscribers];
+    setSubscribers(subscribers.filter(s => s.id !== id));
+
+    try {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+      const res = await fetch(`${API_URL}/api/subscribe/${id}`, { 
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${pin}` }
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success('Pelanggan berhasil dihapus');
+      } else {
+        setSubscribers(previousSubscribers);
+        toast.error('Gagal menghapus pelanggan: ' + data.message);
+      }
+    } catch (err) {
+      setSubscribers(previousSubscribers);
+      toast.error('Error koneksi ke server.');
+    }
   };
 
   if (!isAuthenticated) {
@@ -217,17 +313,18 @@ export default function AdminDashboard() {
                   <th className="p-5 font-black uppercase tracking-widest">Lokasi</th>
                   <th className="p-5 font-black uppercase tracking-widest">Tipe</th>
                   <th className="p-5 font-black uppercase tracking-widest">Deskripsi</th>
+                  <th className="p-5 font-black uppercase tracking-widest text-right pr-8">Aksi</th>
                 </tr>
               </thead>
               <tbody className="text-sm">
                 {loading && (
                   <tr>
-                    <td colSpan={4} className="p-12 text-center text-gray-400 font-medium">Memuat data...</td>
+                    <td colSpan={5} className="p-12 text-center text-gray-400 font-medium">Memuat data...</td>
                   </tr>
                 )}
                 {!loading && reports.length === 0 && (
                   <tr>
-                    <td colSpan={4} className="p-12 text-center text-gray-400 font-medium flex flex-col items-center justify-center gap-3">
+                    <td colSpan={5} className="p-12 text-center text-gray-400 font-medium flex flex-col items-center justify-center gap-3">
                       <span className="material-symbols-outlined text-4xl">inbox</span>
                       Belum ada laporan dari warga.
                     </td>
@@ -240,7 +337,7 @@ export default function AdminDashboard() {
                     </td>
                     <td className="p-5 font-bold text-[#1A3626] max-w-[200px] truncate" title={r.location_name}>{r.location_name}</td>
                     <td className="p-5">
-                      {r.report_type === 'dbd' ? (
+                      {r.report_type?.toUpperCase() === 'DBD' ? (
                         <span className="inline-flex items-center gap-1.5 bg-red-50 text-red-700 border border-red-100 px-3 py-1.5 rounded-full text-xs font-black uppercase tracking-wider shadow-sm">
                           <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span> DBD
                         </span>
@@ -252,6 +349,15 @@ export default function AdminDashboard() {
                     </td>
                     <td className="p-5 text-gray-500 max-w-xs truncate font-medium" title={r.description}>
                       {r.description || '-'}
+                    </td>
+                    <td className="p-5 text-right pr-8">
+                      <button 
+                        onClick={() => handleDeleteReport(r.id)}
+                        className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Hapus Laporan"
+                      >
+                        <span className="material-symbols-outlined text-sm">delete</span>
+                      </button>
                     </td>
                   </tr>
                 ))}
@@ -279,17 +385,18 @@ export default function AdminDashboard() {
                   <th className="p-5 font-black uppercase tracking-widest pl-8">Waktu Daftar</th>
                   <th className="p-5 font-black uppercase tracking-widest">Lokasi Pantauan</th>
                   <th className="p-5 font-black uppercase tracking-widest">Alamat Email</th>
+                  <th className="p-5 font-black uppercase tracking-widest text-right pr-8">Aksi</th>
                 </tr>
               </thead>
               <tbody className="text-sm">
                 {loading && (
                   <tr>
-                    <td colSpan={3} className="p-12 text-center text-gray-400 font-medium">Memuat data...</td>
+                    <td colSpan={4} className="p-12 text-center text-gray-400 font-medium">Memuat data...</td>
                   </tr>
                 )}
                 {!loading && subscribers.length === 0 && (
                   <tr>
-                    <td colSpan={3} className="p-12 text-center text-gray-400 font-medium">Belum ada pelanggan notifikasi.</td>
+                    <td colSpan={4} className="p-12 text-center text-gray-400 font-medium">Belum ada pelanggan notifikasi.</td>
                   </tr>
                 )}
                 {!loading && subscribers.map((s) => (
@@ -303,6 +410,15 @@ export default function AdminDashboard() {
                         <span className="material-symbols-outlined text-[14px] text-gray-400">mail</span>
                         {s.email}
                       </span>
+                    </td>
+                    <td className="p-5 text-right pr-8">
+                      <button 
+                        onClick={() => handleDeleteSubscriber(s.id)}
+                        className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Hapus Pelanggan"
+                      >
+                        <span className="material-symbols-outlined text-sm">delete</span>
+                      </button>
                     </td>
                   </tr>
                 ))}

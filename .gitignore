@@ -79,3 +79,13 @@ mosqrisk.db
 
 # Jupyter Notebook Checkpoints
 .ipynb_checkpoints
+
+# IDE / Editors
+.vscode/
+.idea/
+
+# Logs
+*.log
+
+# Generated App Data
+backend/qr_codes/

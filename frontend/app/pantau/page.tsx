@@ -2,12 +2,16 @@
 
 import React, { useState, useEffect } from 'react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
-import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import { toast } from 'react-hot-toast';
+
+import { useRouter } from 'next/navigation';
+import { supabase } from "@/lib/supabase";
 
 export default function MosqRiskDashboard() {
+  const router = useRouter();
   const [isMounted, setIsMounted] = useState(false);
   const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
   const [isWAModalOpen, setIsWAModalOpen] = useState(false);
@@ -18,17 +22,35 @@ export default function MosqRiskDashboard() {
   const [waError, setWaError] = useState('');
   const [pendingGPSCity, setPendingGPSCity] = useState("");
   const [isEmailRegistered, setIsEmailRegistered] = useState(false);
+  const [subscribedEmail, setSubscribedEmail] = useState("");
+  const [subscribedLocation, setSubscribedLocation] = useState("");
   const [isPremium, setIsPremium] = useState(false);
   const [impactKg, setImpactKg] = useState(2.5);
+  const [user, setUser] = useState<any>(null);
 
   useEffect(() => {
     setIsMounted(true);
     if (typeof window !== 'undefined') {
+      const checkUser = async () => {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          setUser(session.user);
+          setWaNumber(session.user.email || '');
+          setIsEmailRegistered(true);
+          setSubscribedEmail(session.user.email || '');
+          localStorage.setItem('emailRegistered', 'true');
+          localStorage.setItem('subscribedEmail', session.user.email || '');
+        }
+      };
+      checkUser();
+
+      const premium = localStorage.getItem('isPremium') === 'true';
+      setIsPremium(premium);
+
       if (localStorage.getItem('emailRegistered') === 'true') {
         setIsEmailRegistered(true);
-      }
-      if (localStorage.getItem('isPremium') === 'true') {
-        setIsPremium(true);
+        setSubscribedEmail(localStorage.getItem('subscribedEmail') || "");
+        setSubscribedLocation(localStorage.getItem('subscribedLocation') || "");
       }
     }
     
@@ -40,7 +62,7 @@ export default function MosqRiskDashboard() {
         if (data.success) setImpactKg(data.impact_kg);
       })
       .catch(err => console.error("Failed to fetch stats:", err));
-  }, []);
+  }, [router]);
 
   const handleWASubmit = async () => {
     if(!locationName) { 
@@ -65,7 +87,11 @@ export default function MosqRiskDashboard() {
       if(data.success) {
         setWaSuccess(data.message);
         localStorage.setItem('emailRegistered', 'true');
+        localStorage.setItem('subscribedEmail', waNumber);
+        localStorage.setItem('subscribedLocation', locationName || "Umum");
         setIsEmailRegistered(true);
+        setSubscribedEmail(waNumber);
+        setSubscribedLocation(locationName || "Umum");
         setTimeout(() => { setIsWAModalOpen(false); setWaSuccess(''); setWaNumber(''); }, 3000);
       } else {
         setWaError(data.message);
@@ -74,6 +100,19 @@ export default function MosqRiskDashboard() {
       setWaError("Terjadi kesalahan koneksi.");
     } finally {
       setWaSubmitting(false);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    try {
+      await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/pantau`
+        }
+      });
+    } catch (error) {
+      toast.error("Gagal memulai login Google");
     }
   };
 
@@ -130,7 +169,7 @@ export default function MosqRiskDashboard() {
             setSelectedReg(matchedReg.id);
             setIsLocationModalOpen(false);
           } else {
-            alert(`Kota ${pendingGPSCity} tidak ditemukan di database (Kemungkinan GPS meleset). Silakan pilih manual.`);
+            toast.error(`Kota ${pendingGPSCity} tidak ditemukan di database (Kemungkinan GPS meleset). Silakan pilih manual.`);
           }
           setPendingGPSCity("");
           setLoading(false);
@@ -144,7 +183,7 @@ export default function MosqRiskDashboard() {
 
   const handleGPSLocation = () => {
     if (!navigator.geolocation) {
-      alert("Browser Anda tidak mendukung fitur GPS.");
+      toast.error("Browser Anda tidak mendukung fitur GPS.");
       return;
     }
     setLoading(true);
@@ -170,11 +209,11 @@ export default function MosqRiskDashboard() {
           }
         }
       } catch (err: any) {
-        alert("Gagal melacak lokasi: " + err.message);
+        toast.error("Gagal melacak lokasi: " + err.message);
         setLoading(false);
       }
     }, () => {
-      alert("Izin GPS ditolak.");
+      toast.error("Izin GPS ditolak.");
       setLoading(false);
     });
   };
@@ -208,6 +247,28 @@ export default function MosqRiskDashboard() {
                 backendData.data.trend[0].risk_score = backendData.data.risk_score;
             }
             setMosqRiskData(backendData.data);
+            
+            // AUTO-TRACKING LOGIC
+            const currentEmail = localStorage.getItem('emailRegistered') === 'true' ? localStorage.getItem('subscribedEmail') : null;
+            const currentSubLoc = localStorage.getItem('subscribedLocation');
+            const newLocName = regObj ? regObj.name : "";
+            
+            if (currentEmail && newLocName && currentSubLoc !== newLocName) {
+                fetch(`${API_URL}/api/subscribe`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        locationName: newLocName,
+                        email: currentEmail
+                    })
+                }).then(r => r.json()).then(subData => {
+                    if(subData.success) {
+                        localStorage.setItem('subscribedLocation', newLocName);
+                        setSubscribedLocation(newLocName);
+                        toast.success(`Lokasi peringatan email diperbarui ke ${newLocName}`);
+                    }
+                }).catch(e => console.error("Auto-track error", e));
+            }
         } else {
             setErrorMsg(backendData.error || "Gagal mengambil data cuaca dari backend.");
             setMosqRiskData(null);
@@ -226,11 +287,9 @@ export default function MosqRiskDashboard() {
 
   return (
     <div className="w-full flex flex-col min-h-screen pt-28 md:pt-32 font-['Plus_Jakarta_Sans'] antialiased">
-      {/* Navigation Bar */}
       <Navbar rightAction={
         <button 
           onClick={() => {
-            if (isEmailRegistered) return;
             if (isPremium) setIsWAModalOpen(true);
             else setIsPremiumAlertOpen(true);
           }}
@@ -241,7 +300,7 @@ export default function MosqRiskDashboard() {
             {isEmailRegistered ? 'mark_email_read' : 'notifications_active'}
           </span>
           <span className="hidden md:block">
-            {isEmailRegistered ? 'Notifikasi Aktif' : isPremium ? 'Aktifkan Alert Darurat' : 'Aktifkan Peringatan'}
+            {isEmailRegistered ? 'Email / Setelan' : isPremium ? 'Aktifkan Alert Darurat' : 'Aktifkan Peringatan'}
           </span>
         </button>
       } />
@@ -286,6 +345,14 @@ export default function MosqRiskDashboard() {
                 onClick={() => setIsLocationModalOpen(true)}
               >
                 <p className="text-on-surface-variant font-label-md bg-white px-6 py-3 rounded-full shadow-md group-hover:shadow-lg group-hover:scale-105 transition-all">Pilih Lokasi Terlebih Dahulu</p>
+              </div>
+            )}
+            {loading && (
+              <div className="absolute inset-0 bg-surface z-20 flex flex-col items-center justify-center p-8">
+                <div className="h-4 bg-gray-200 animate-pulse rounded w-1/2 mb-8"></div>
+                <div className="w-40 h-20 md:w-48 md:h-24 bg-gray-200 animate-pulse rounded-t-full mb-6"></div>
+                <div className="h-8 bg-gray-200 animate-pulse rounded w-3/4 mb-4"></div>
+                <div className="h-6 bg-gray-200 animate-pulse rounded w-1/3"></div>
               </div>
             )}
             <h2 className="font-label-md text-label-md text-on-surface-variant uppercase tracking-widest mb-4">TINGKAT RISIKO SAAT INI</h2>
@@ -396,6 +463,19 @@ export default function MosqRiskDashboard() {
                 <p className="text-on-surface-variant font-label-md bg-white px-6 py-3 rounded-full shadow-md group-hover:shadow-lg group-hover:scale-105 transition-all">Pilih Lokasi Terlebih Dahulu</p>
               </div>
             )}
+            {loading && (
+              <div className="absolute inset-0 z-20 grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-8">
+                {[1,2,3].map(i => (
+                  <div key={i} className={`bg-surface rounded-[20px] p-4 md:p-8 flex items-center gap-4 animate-pulse border border-outline/5 ${i===3 ? 'col-span-2 md:col-span-1' : ''}`}>
+                    <div className="w-8 h-8 md:w-12 md:h-12 bg-gray-200 rounded-full shrink-0"></div>
+                    <div className="flex-col gap-2 flex-grow hidden md:flex">
+                      <div className="h-3 bg-gray-200 rounded w-1/2"></div>
+                      <div className="h-5 bg-gray-200 rounded w-3/4"></div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
             <div className="flex flex-col md:flex-row items-center md:items-start text-center md:text-left gap-2 md:gap-4 bg-surface rounded-[20px] shadow-sm hover:shadow-lg transition-all duration-300 hover:-translate-y-1 p-4 md:p-8">
               <div className="w-8 h-8 md:w-12 md:h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0">
                 <span className="material-symbols-outlined text-lg md:text-3xl">rainy</span>
@@ -435,6 +515,12 @@ export default function MosqRiskDashboard() {
                 onClick={() => setIsLocationModalOpen(true)}
               >
                 <p className="text-on-surface-variant font-label-md bg-white px-6 py-3 rounded-full shadow-md group-hover:shadow-lg group-hover:scale-105 transition-all">Pilih Lokasi Terlebih Dahulu</p>
+              </div>
+            )}
+            {loading && (
+              <div className="absolute inset-0 bg-surface z-20 flex flex-col p-6 md:p-10 animate-pulse rounded-[20px]">
+                <div className="h-6 bg-gray-200 rounded w-1/3 md:w-1/4 mb-6"></div>
+                <div className="flex-grow bg-gray-100/50 rounded-xl w-full"></div>
               </div>
             )}
             <h3 className="font-headline-md text-base md:text-headline-md text-primary mb-4 md:mb-6">
@@ -493,6 +579,18 @@ export default function MosqRiskDashboard() {
                 </div>
               )}
             </div>
+
+            {/* Tombol Auto-Update Email ke Lokasi Terkini */}
+            {isEmailRegistered && isPremium && (
+              <button 
+                onClick={handleGPSLocation} 
+                className="mt-6 w-full bg-primary/10 text-primary hover:bg-primary hover:text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 transition-all border border-primary/20 shadow-sm group"
+              >
+                <span className="material-symbols-outlined group-hover:animate-pulse">my_location</span>
+                <span className="text-sm md:text-base">Sesuaikan Lokasi Email dengan GPS Terkini</span>
+              </button>
+            )}
+
           </div>
 
           {/* Eco Impact */}
@@ -593,30 +691,62 @@ export default function MosqRiskDashboard() {
                   Sistem kami telah mendaftarkan email Anda. Anda akan menerima pesan sambutan di kotak masuk email Anda sekarang juga.
                 </p>
               </div>
+            ) : isEmailRegistered ? (
+              <div className="flex flex-col gap-4 animate-in zoom-in duration-300">
+                <div className="bg-[#1A3626]/5 p-4 rounded-xl border border-[#1A3626]/10 text-center">
+                  <p className="text-sm text-on-surface-variant mb-1">Berlangganan sebagai:</p>
+                  <p className="font-bold text-[#1A3626] mb-3">{subscribedEmail}</p>
+                  <p className="text-sm text-on-surface-variant mb-1">Lokasi Pemantauan:</p>
+                  <p className="font-bold text-[#1A3626]">{subscribedLocation || locationName}</p>
+                </div>
+                <button 
+                  onClick={async () => {
+                    await supabase.auth.signOut();
+                    setUser(null);
+                    localStorage.removeItem('emailRegistered');
+                    localStorage.removeItem('subscribedEmail');
+                    localStorage.removeItem('subscribedLocation');
+                    setIsEmailRegistered(false);
+                    setSubscribedEmail("");
+                    setSubscribedLocation("");
+                    setWaNumber("");
+                    setIsWAModalOpen(false);
+                  }}
+                  className="w-full bg-red-50 text-red-600 border border-red-200 font-bold py-3 rounded-lg hover:bg-red-100 transition-colors flex items-center justify-center gap-2 shadow-sm"
+                >
+                  <span className="material-symbols-outlined text-sm">logout</span> Logout
+                </button>
+              </div>
             ) : (
               <>
                 <p className="text-sm text-on-surface-variant mb-6">
-                  Masukkan alamat Email Anda untuk menerima peringatan otomatis jika status risiko di daerah <strong>{locationName || "Anda"}</strong> berubah menjadi TINGGI.
+                  {user ? (
+                    <span>Sistem mendeteksi Anda login dengan email <strong className="text-primary">{user.email}</strong>. Aktifkan peringatan otomatis untuk mendeteksi lonjakan risiko di daerah <strong>{locationName || "Anda"}</strong>?</span>
+                  ) : (
+                    <span>Anda harus Login menggunakan akun Google Anda terlebih dahulu untuk mengaktifkan peringatan otomatis.</span>
+                  )}
                 </p>
 
                 <div className="flex flex-col gap-4">
-                  <input 
-                    type="text" 
-                    placeholder="Contoh: nama@email.com" 
-                    value={waNumber}
-                    onChange={e => setWaNumber(e.target.value)}
-                    className="w-full bg-background border border-outline/30 rounded-lg px-4 py-3 text-on-surface focus:outline-none focus:border-primary text-sm"
-                  />
-                  
                   {waError && <p className="text-red-500 text-sm font-semibold">{waError}</p>}
 
-                  <button 
-                    onClick={handleWASubmit}
-                    disabled={waSubmitting}
-                    className="w-full bg-[#1A3626] text-[#EAC775] font-bold py-3 rounded-lg hover:bg-[#12261b] hover:text-white transition-colors flex items-center justify-center gap-2 disabled:opacity-70 shadow-md"
-                  >
-                    {waSubmitting ? "Mendaftarkan..." : "Daftar Sekarang"}
-                  </button>
+                  {user ? (
+                    <button 
+                      onClick={handleWASubmit}
+                      disabled={waSubmitting}
+                      className="w-full bg-[#1A3626] text-[#EAC775] font-bold py-3 rounded-lg hover:bg-[#12261b] hover:text-white transition-colors flex items-center justify-center gap-2 disabled:opacity-70 shadow-md"
+                    >
+                      {waSubmitting ? "Mendaftarkan..." : "Daftar Sekarang"}
+                    </button>
+                  ) : (
+                    <button 
+                      onClick={handleGoogleLogin}
+                      className="w-full bg-white border border-gray-300 text-gray-700 font-bold py-3 rounded-lg hover:bg-gray-50 transition-colors flex items-center justify-center gap-3 shadow-sm"
+                    >
+                      <img src="https://www.svgrepo.com/show/475656/google-color.svg" alt="Google" className="w-5 h-5" />
+                      Login dengan Google
+                    </button>
+                  )}
                 </div>
               </>
             )}

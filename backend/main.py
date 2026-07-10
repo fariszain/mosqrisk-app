@@ -1,7 +1,8 @@
 # Ingat untuk menginstal dependensi sebelum menjalankan file ini:
 # pip install fastapi uvicorn requests
 
-from fastapi import FastAPI, Query, BackgroundTasks
+from fastapi import FastAPI, Query, BackgroundTasks, Depends, HTTPException, status
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
 import requests
 from datetime import datetime
@@ -12,6 +13,7 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from dotenv import load_dotenv
 from supabase import create_client, Client
+import midtransclient
 
 load_dotenv()
 
@@ -24,12 +26,19 @@ if not supabase_url or not supabase_key:
     
 supabase: Client = create_client(supabase_url or "", supabase_key or "")
 
+# Setup Midtrans Client
+snap = midtransclient.Snap(
+    is_production=os.environ.get('MIDTRANS_IS_PRODUCTION', 'false').lower() == 'true',
+    server_key=os.environ.get('MIDTRANS_SERVER_KEY'),
+    client_key=os.environ.get('MIDTRANS_CLIENT_KEY')
+)
+
 app = FastAPI(title="MosqRisk Backend API")
 
 # Konfigurasi CORS agar frontend Next.js (localhost:3000) bisa melakukan fetch tanpa diblokir browser
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["https://mosqrisk-app.vercel.app", "http://localhost:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -49,6 +58,30 @@ class Subscriber(BaseModel):
 
 class ClaimRequest(BaseModel):
     code: str
+
+class CheckoutRequest(BaseModel):
+    name: str
+    phone: str
+    package: str
+    paymentMethod: str
+
+class PaymentRequest(BaseModel):
+    name: str
+    phone: str
+    package: str
+    amount: int
+
+security = HTTPBearer()
+
+def verify_admin(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    admin_key = os.getenv("ADMIN_KEY", "kemenkes123")
+    if credentials.credentials != admin_key:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authentication credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return credentials.credentials
 
 # API Endpoint JSON Publik BMKG
 BASE_URL = "https://api.bmkg.go.id/publik/prakiraan-cuaca?adm4="
@@ -102,7 +135,7 @@ def fetch_city_weather(adm4_code):
             try:
                 cuaca_lists = data.get('data', [{}])[0].get('cuaca', [])
                 if not cuaca_lists or not cuaca_lists[0]:
-                    return None, None, None, "Data cuaca kosong dari BMKG"
+                    return None, None, None, None, None, None, "Data cuaca kosong dari BMKG"
                 
                 # Ekstrak data saat ini (hari ini, record pertama)
                 current_weather = cuaca_lists[0][0]
@@ -160,7 +193,7 @@ def fetch_city_weather(adm4_code):
         return None, None, None, None, None, None, f"Network Error: {str(e)}"
 
 @app.get("/api/mosqrisk")
-def get_mosqrisk_data(adm4: str = Query(..., description="Kode ADM4 BPS (contoh: 11.71.03.2001)")):
+async def get_mosqrisk_data(adm4: str = Query(..., description="Kode ADM4 BPS (contoh: 11.71.03.2001)")):
     """Endpoint utama untuk menarik skor risiko nyamuk berdasarkan kode adm4 wilayah"""
     temp, humidity, precipitation, lat, lon, trend, err_msg = fetch_city_weather(adm4)
 
@@ -228,7 +261,7 @@ def send_local_broadcast(report: Report):
         print(f"Error sending local broadcast: {email_err}")
 
 @app.post("/api/reports")
-def submit_report(report: Report, background_tasks: BackgroundTasks):
+async def submit_report(report: Report, background_tasks: BackgroundTasks):
     try:
         # Insert to Supabase
         supabase.table("reports").insert({
@@ -244,15 +277,23 @@ def submit_report(report: Report, background_tasks: BackgroundTasks):
         return {"success": False, "message": str(e)}
 
 @app.get("/api/reports")
-def get_reports():
+async def get_reports(token: str = Depends(verify_admin)):
     try:
         response = supabase.table("reports").select("*").order("created_at", desc=True).execute()
         return {"success": True, "data": response.data}
     except Exception as e:
         return {"success": False, "error": str(e)}
 
+@app.delete("/api/reports/{id}")
+async def delete_report(id: str, token: str = Depends(verify_admin)):
+    try:
+        supabase.table("reports").delete().eq("id", id).execute()
+        return {"success": True, "message": "Laporan berhasil dihapus"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
 @app.get("/api/stats")
-def get_stats():
+async def get_stats():
     try:
         reports_res = supabase.table("reports").select("*", count="exact").execute()
         total_reports = reports_res.count if reports_res.count is not None else 0
@@ -290,12 +331,16 @@ def send_welcome_email(sub: Subscriber):
         print(f"Failed sending welcome email: {e}")
 
 @app.post("/api/subscribe")
-def subscribe_wa(sub: Subscriber, background_tasks: BackgroundTasks):
+async def subscribe_wa(sub: Subscriber, background_tasks: BackgroundTasks):
     try:
         # Check if already subscribed
         check = supabase.table("subscribers").select("*", count="exact").eq("email", sub.email).execute()
         if check.count and check.count > 0:
-            return {"success": False, "message": "Email Anda sudah terdaftar sebelumnya."}
+            # Upsert (Update location if exists)
+            supabase.table("subscribers").update({
+                "location_name": sub.locationName
+            }).eq("email", sub.email).execute()
+            return {"success": True, "message": f"Lokasi pantauan untuk email Anda berhasil diperbarui menjadi {sub.locationName}."}
         
         # Insert into DB
         supabase.table("subscribers").insert({
@@ -310,10 +355,18 @@ def subscribe_wa(sub: Subscriber, background_tasks: BackgroundTasks):
         return {"success": False, "message": f"Gagal mendaftarkan Email: {str(e)}"}
 
 @app.get("/api/subscribe")
-def get_subscribers():
+async def get_subscribers(token: str = Depends(verify_admin)):
     try:
         response = supabase.table("subscribers").select("*").order("created_at", desc=True).execute()
         return {"success": True, "data": response.data}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+@app.delete("/api/subscribe/{id}")
+async def delete_subscriber(id: str, token: str = Depends(verify_admin)):
+    try:
+        supabase.table("subscribers").delete().eq("id", id).execute()
+        return {"success": True, "message": "Pelanggan berhasil dihapus"}
     except Exception as e:
         return {"success": False, "error": str(e)}
 
@@ -343,11 +396,12 @@ def send_broadcast_emails(rows):
     except Exception as e:
         print(f"Failed to process broadcast: {e}")
 
+@app.post("/api/admin/verify")
+def verify_admin_login(token: str = Depends(verify_admin)):
+    return {"success": True, "message": "Admin verified"}
+
 @app.post("/api/broadcast")
-def broadcast_alert(background_tasks: BackgroundTasks, key: str = Query("")):
-    admin_key = os.getenv("ADMIN_KEY", "kemenkes123")
-    if key != admin_key:
-        return {"success": False, "message": "Unauthorized"}
+async def broadcast_alert(background_tasks: BackgroundTasks, token: str = Depends(verify_admin)):
     try:
         response = supabase.table("subscribers").select("email, location_name").execute()
         rows = [(row['email'], row['location_name']) for row in response.data]
@@ -362,14 +416,10 @@ def broadcast_alert(background_tasks: BackgroundTasks, key: str = Query("")):
         return {"success": False, "message": str(e)}
 
 @app.post("/api/claim")
-def claim_premium(req: ClaimRequest):
+async def claim_premium(req: ClaimRequest):
     try:
         code_upper = req.code.strip().upper()
         
-        # Master Admin Testing Code (Bypass and reusable)
-        if code_upper == "MOSQ-ADMIN-TEST":
-            return {"success": True, "message": "Berhasil! Akun Anda kini berstatus Premium (Mode Testing)."}
-            
         # Check if code exists and is not used
         result = supabase.table("premium_codes").select("*").eq("code", code_upper).execute()
         if not result.data:
@@ -383,6 +433,43 @@ def claim_premium(req: ClaimRequest):
         supabase.table("premium_codes").update({"is_used": True}).eq("code", code_upper).execute()
         
         return {"success": True, "message": "Berhasil! Akun Anda kini berstatus Premium."}
+    except Exception as e:
+        return {"success": False, "message": str(e)}
+
+@app.post("/api/checkout/verify")
+def verify_checkout(req: CheckoutRequest):
+    # Mock server-side payment verification
+    return {"success": True, "message": "Pembayaran berhasil diverifikasi", "isPremium": True}
+
+@app.post("/api/payment/token")
+async def create_payment_token(req: PaymentRequest):
+    try:
+        import uuid
+        order_id = f"MOSQ-{datetime.now().strftime('%Y%m%d%H%M%S')}-{str(uuid.uuid4())[:8]}"
+        
+        param = {
+            "transaction_details": {
+                "order_id": order_id,
+                "gross_amount": req.amount
+            },
+            "customer_details": {
+                "first_name": req.name,
+                "phone": req.phone
+            },
+            "item_details": [
+                {
+                    "id": f"PKG-{req.package}",
+                    "price": req.amount,
+                    "quantity": 1,
+                    "name": f"MosqRisk Premium - {req.package} Botol" if req.package != "QRIS" else "Akses Premium (Tanpa Kemasan)"
+                }
+            ]
+        }
+        
+        transaction = snap.create_transaction(param)
+        transaction_token = transaction['token']
+        
+        return {"success": True, "token": transaction_token, "order_id": order_id}
     except Exception as e:
         return {"success": False, "message": str(e)}
 

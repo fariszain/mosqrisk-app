@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { toast } from 'react-hot-toast';
 
 import Navbar from "@/components/Navbar";
 
@@ -11,8 +12,11 @@ export default function CheckoutPage() {
   const [paymentMethod, setPaymentMethod] = useState("QRIS");
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
   const [isQrisModalOpen, setIsQrisModalOpen] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   const [address, setAddress] = useState("KOTA BANDA ACEH, ACEH");
   const [isLoadingAddress, setIsLoadingAddress] = useState(false);
+  const [customerName, setCustomerName] = useState("");
+  const [customerPhone, setCustomerPhone] = useState("");
 
   useEffect(() => {
     setIsMounted(true);
@@ -45,13 +49,67 @@ export default function CheckoutPage() {
   if (quantity === 2) totalPrice = 65000;
   if (quantity === 3) totalPrice = 90000;
 
+  const handlePaymentVerification = () => {
+    setIsProcessing(true);
+    setTimeout(() => {
+      setIsProcessing(false);
+      setIsQrisModalOpen(false);
+      setIsSuccessModalOpen(true);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('isPremium', 'true');
+      }
+    }, 1500);
+  };
+
+  const handleCheckout = async () => {
+    try {
+      const toastId = toast.loading("Memproses pembayaran...");
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+      const res = await fetch(`${API_URL}/api/payment/token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: customerName,
+          phone: customerPhone,
+          package: quantity.toString(),
+          amount: totalPrice
+        })
+      });
+      const data = await res.json();
+      toast.dismiss(toastId);
+      
+      if (data.success && data.token) {
+        (window as any).snap.pay(data.token, {
+          onSuccess: function(result: any) {
+            localStorage.setItem("isPremium", "true");
+            setIsQrisModalOpen(false);
+            setIsSuccessModalOpen(true);
+          },
+          onPending: function(result: any) {
+            toast.success("Menunggu pembayaran...");
+          },
+          onError: function(result: any) {
+            toast.error("Pembayaran gagal!");
+          },
+          onClose: function() {
+            toast.error("Anda menutup popup sebelum menyelesaikan pembayaran");
+          }
+        });
+      } else {
+        toast.error("Gagal memproses pembayaran: " + (data.message || "Unknown error"));
+      }
+    } catch(err) {
+      toast.error("Error menghubungi server");
+    }
+  };
+
   const handleOrder = (e: React.FormEvent) => {
     e.preventDefault();
-    if (paymentMethod === "QRIS") {
-      setIsQrisModalOpen(true);
-    } else {
-      setIsSuccessModalOpen(true);
+    if (!customerName || !customerPhone || !address) {
+      toast.error("Mohon lengkapi data pengiriman");
+      return;
     }
+    handleCheckout();
   };
 
   // Tema Warna Terinspirasi dari Card "Tindakan Disarankan" MosqRisk
@@ -65,9 +123,9 @@ export default function CheckoutPage() {
       
       {/* Navigation Bar */}
       <Navbar rightAction={
-        <div className="flex items-center text-slate-600 gap-1.5 bg-slate-50 px-4 py-2 rounded-full border border-slate-200 shadow-sm">
-          <span className="material-symbols-outlined text-danger text-[18px]">location_on</span>
-          <span className="font-bold text-[13px]">KOTA BANDA ACEH, ACEH</span>
+        <div className="flex items-center text-slate-600 gap-1.5 bg-slate-50 px-4 py-2 rounded-full border border-slate-200 shadow-sm max-w-[200px] sm:max-w-xs">
+          <span className="material-symbols-outlined text-danger text-[18px] shrink-0">location_on</span>
+          <span className="font-bold text-[13px] truncate" title={address}>{address ? address.split(',')[0].toUpperCase() : 'MENCARI LOKASI...'}</span>
         </div>
       } />
 
@@ -149,15 +207,15 @@ export default function CheckoutPage() {
 
         {/* Info Bar - Better spacing */}
         <div className="bg-white rounded-2xl p-4 md:p-5 flex flex-wrap items-center justify-center md:justify-start gap-6 md:gap-10 text-xs md:text-sm font-bold text-gray-500 mb-10 shadow-sm border border-gray-100">
-          <div className={`flex items-center gap-2 hover:${textDarkGreen} transition-colors cursor-default`}>
+          <div className={`flex items-center gap-2 hover:text-[#1A3626] transition-colors cursor-default`}>
             <span className={`material-symbols-outlined text-[20px] ${textDarkGreen}`}>verified</span>
             Jaminan Kualitas
           </div>
-          <div className={`flex items-center gap-2 hover:${textDarkGreen} transition-colors cursor-default`}>
+          <div className={`flex items-center gap-2 hover:text-[#1A3626] transition-colors cursor-default`}>
             <span className={`material-symbols-outlined text-[20px] ${textDarkGreen}`}>eco</span>
             100% Bahan Alami
           </div>
-          <div className={`flex items-center gap-2 hover:${textDarkGreen} transition-colors cursor-default hidden sm:flex`}>
+          <div className={`flex items-center gap-2 hover:text-[#1A3626] transition-colors cursor-default hidden sm:flex`}>
             <span className={`material-symbols-outlined text-[20px] ${textDarkGreen}`}>lock</span>
             Transaksi Terenkripsi
           </div>
@@ -179,11 +237,11 @@ export default function CheckoutPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                 <div>
                   <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-3 ml-1">Nama Lengkap</label>
-                  <input type="text" required placeholder="Ketik nama penerima" className={`w-full bg-gray-50 border border-gray-200 rounded-2xl px-5 py-4 text-sm font-medium focus:outline-none focus:border-[#1A3626] focus:ring-4 focus:ring-[#1A3626]/10 transition-all text-gray-800 placeholder-gray-400`} />
+                  <input type="text" required value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="Ketik nama penerima" className={`w-full bg-gray-50 border border-gray-200 rounded-2xl px-5 py-4 text-sm font-medium focus:outline-none focus:border-[#1A3626] focus:ring-4 focus:ring-[#1A3626]/10 transition-all text-gray-800 placeholder-gray-400`} />
                 </div>
                 <div>
                   <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-3 ml-1">Nomor WhatsApp</label>
-                  <input type="tel" required placeholder="Contoh: 081234567890" className={`w-full bg-gray-50 border border-gray-200 rounded-2xl px-5 py-4 text-sm font-medium focus:outline-none focus:border-[#1A3626] focus:ring-4 focus:ring-[#1A3626]/10 transition-all text-gray-800 placeholder-gray-400`} />
+                  <input type="tel" required value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} placeholder="Contoh: 081234567890" className={`w-full bg-gray-50 border border-gray-200 rounded-2xl px-5 py-4 text-sm font-medium focus:outline-none focus:border-[#1A3626] focus:ring-4 focus:ring-[#1A3626]/10 transition-all text-gray-800 placeholder-gray-400`} />
                 </div>
               </div>
               <div>
@@ -412,10 +470,7 @@ export default function CheckoutPage() {
             </div>
             
             <div className="flex flex-col gap-3">
-              <button onClick={() => {
-                setIsQrisModalOpen(false);
-                setIsSuccessModalOpen(true);
-              }} className={`w-full ${bgGoldAccent} ${textDarkGreen} font-black py-4 rounded-2xl hover:brightness-105 transition-all shadow-lg`}>
+              <button onClick={handlePaymentVerification} className={`w-full ${bgGoldAccent} ${textDarkGreen} font-black py-4 rounded-2xl hover:brightness-105 transition-all shadow-lg`}>
                 Saya Sudah Bayar
               </button>
               <button onClick={() => setIsQrisModalOpen(false)} className={`w-full bg-gray-100 text-gray-500 font-bold py-3 rounded-2xl hover:bg-gray-200 transition-colors text-sm`}>
@@ -435,7 +490,7 @@ export default function CheckoutPage() {
             </div>
             <h2 className={`text-2xl font-black ${textDarkGreen} mb-3 tracking-tight`}>Transaksi Sukses!</h2>
             <p className="text-gray-500 mb-8 text-sm leading-relaxed font-medium">
-              Desain Checkout telah diperbaiki! Semua elemen kini tersusun rapi tanpa ada bagian yang saling menabrak.
+              Pembayaran Anda berhasil diverifikasi. Akun Anda kini berstatus Premium!
             </p>
             <button onClick={() => setIsSuccessModalOpen(false)} className={`inline-block w-full bg-gray-100 ${textDarkGreen} font-black py-4 rounded-2xl hover:bg-gray-200 transition-colors`}>
               Tutup

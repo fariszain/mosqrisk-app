@@ -4,6 +4,7 @@ import Link from 'next/link';
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { useState, useEffect } from 'react';
+import { toast } from 'react-hot-toast';
 
 export default function LaporPage() {
   const [location, setLocation] = useState('');
@@ -16,7 +17,7 @@ export default function LaporPage() {
 
   const handleGPS = () => {
     if (!navigator.geolocation) {
-      alert("GPS tidak didukung browser Anda.");
+      toast.error("GPS tidak didukung browser Anda.");
       return;
     }
     setLoadingGPS(true);
@@ -28,11 +29,11 @@ export default function LaporPage() {
           setLocation(data.display_name);
         }
       } catch (e) {
-        alert("Gagal melacak lokasi.");
+        toast.error("Gagal melacak lokasi.");
       }
       setLoadingGPS(false);
     }, () => {
-      alert("Izin lokasi ditolak.");
+      toast.error("Izin lokasi ditolak.");
       setLoadingGPS(false);
     });
   };
@@ -45,20 +46,22 @@ export default function LaporPage() {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({
+        name: formData.get('name'),
+        contact: formData.get('contact'),
         locationName: location || formData.get('location') || 'Tidak Diketahui',
         description: formData.get('description'),
         reportType: formData.get('type')
       })
     }).then(res=>res.json()).then(data=>{
       if(data.success) {
-        alert('Laporan berhasil dikirim! Peringatan dini telah diproses untuk area Anda.');
+        toast.success('Laporan berhasil dikirim! Peringatan dini telah diproses untuk area Anda.');
         (e.target as HTMLFormElement).reset();
         setLocation('');
       } else {
-        alert('Gagal mengirim laporan: ' + data.message);
+        toast.error('Gagal mengirim laporan: ' + data.message);
       }
     }).catch(err => {
-      alert('Terjadi kesalahan koneksi.');
+      toast.error('Terjadi kesalahan koneksi.');
     });
   };
 

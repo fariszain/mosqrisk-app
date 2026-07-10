@@ -50,7 +50,7 @@ export default function ClaimModal({ isOpen, onClose }: ClaimModalProps) {
         setStatus("error");
         setErrorMessage(data.message);
       }
-    } catch (err) {
+    } catch {
       setStatus("error");
       setErrorMessage("Gagal terhubung ke server.");
     }
@@ -132,6 +132,7 @@ export default function ClaimModal({ isOpen, onClose }: ClaimModalProps) {
           </h3>
           <button 
             onClick={onClose}
+            aria-label="Tutup Modal"
             className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 text-gray-500 hover:bg-gray-200 transition-colors"
           >
             <span className="material-symbols-outlined text-sm">close</span>
