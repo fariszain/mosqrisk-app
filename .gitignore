@@ -89,3 +89,4 @@ mosqrisk.db
 
 # Generated App Data
 backend/qr_codes/
+!frontend/lib/
