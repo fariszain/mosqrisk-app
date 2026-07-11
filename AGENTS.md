@@ -4,49 +4,135 @@
 This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
 <!-- END:nextjs-agent-rules -->
 
-# MosqRisk Agent Guidelines & Project Architecture
+# MosqRisk — Agent Guidelines & Project Architecture
 
 ## 📁 Struktur Folder Utama
 ```text
 /home/zeyn/Documents/UTU/mosqrisk-app/
 │
-├── backend/                 # Aplikasi Python (FastAPI Backend)
-│   ├── main.py              # Endpoint API utama, logika perhitungan skor risiko, dan email SMTP
-│   ├── requirements.txt     # Dependensi modul Python (fastapi, uvicorn, supabase, dll)
-│   └── qr_codes/            # Direktori penyimpanan lokal kode QR kemasan Patchmos
+├── backend/                     # Python FastAPI Backend
+│   ├── main.py                  # Seluruh endpoint API (479 baris)
+│   ├── requirements.txt         # fastapi, uvicorn, requests, supabase, python-dotenv, pydantic
+│   └── qr_codes/                # QR code kemasan (gitignored)
 │
-├── frontend/                # Aplikasi Next.js (React Frontend)
-│   ├── app/                 # Halaman utama (App Router)
-│   │   ├── admin/           # Halaman kontrol admin & pengiriman broadcast
-│   │   ├── checkout/        # Halaman pembelian produk Patchmos + simulasi QRIS
-│   │   ├── claim/           # Halaman verifikasi kode unik kemasan
-│   │   ├── lapor/           # Form laporan kasus & jentik warga
-│   │   ├── pantau/          # Peta visual risiko DBD & rekomendasi tindakan
-│   │   ├── globals.css      # Style global & konfigurasi CSS Tailwind
-│   │   ├── layout.tsx       # Layout utama dengan inisialisasi font
-│   │   └── page.tsx         # Landing page utama
+├── frontend/                    # Next.js 16 (App Router, Turbopack)
+│   ├── app/
+│   │   ├── page.tsx             # Landing page (18.7KB)
+│   │   ├── pantau/page.tsx      # Dashboard risiko & cuaca (terbesar, ~786 baris)
+│   │   ├── lapor/page.tsx       # Form laporan warga
+│   │   ├── checkout/page.tsx    # Pembelian + Midtrans Snap
+│   │   ├── claim/page.tsx       # Verifikasi kode premium
+│   │   ├── admin/page.tsx       # Dashboard admin (PIN-protected)
+│   │   ├── layout.tsx           # Root layout (font, PWA, Midtrans script)
+│   │   ├── template.tsx         # Page transition (Framer Motion)
+│   │   └── globals.css          # Global CSS + Tailwind v4 theme
 │   │
-│   ├── components/          # Komponen React reusable (Navbar.tsx, Footer.tsx)
-│   └── public/              # File aset gambar & data statis (regency_to_adm4.json, Spray-fixed.png, dll)
+│   ├── components/
+│   │   ├── Navbar.tsx           # Top nav (desktop only, hidden < lg)
+│   │   ├── BottomNav.tsx        # Bottom nav (mobile, md:hidden)
+│   │   ├── Footer.tsx           # Footer global
+│   │   ├── ClaimModal.tsx       # Modal scan QR / input kode / beli akses (12KB)
+│   │   ├── RevealOnScroll.tsx   # Intersection Observer scroll animation
+│   │   └── SlidingAuthCard.tsx  # Auth card (currently unused)
+│   │
+│   ├── lib/
+│   │   └── supabase.ts          # Supabase client init (CRITICAL — was gitignored, now fixed)
+│   │
+│   ├── public/                  # Aset statis
+│   │   ├── regency_to_adm4.json # Mapping kota → kode ADM4 BMKG
+│   │   ├── manifest.json        # PWA manifest
+│   │   └── *.png                # Gambar produk, logo, QRIS
+│   │
+│   └── next.config.ts           # PWA + API rewrites + eslint/ts ignore during builds
+│
+├── supabase_setup.sql           # Skema tabel SQL
+├── vercel.json                  # Deployment config
+└── .gitignore                   # PENTING: `!frontend/lib/` exception added
 ```
 
-## 🔌 Endpoint API Utama (FastAPI)
-- `GET /api/mosqrisk?adm4=XX`: Mengambil prakiraan cuaca wilayah dari BMKG, menghitung skor risiko DBD berbasis suhu, kelembapan, curah hujan harian.
-- `GET /api/reports`: Menarik daftar laporan masyarakat (kasus DBD & sarang jentik) langsung dari Supabase.
-- `POST /api/reports`: Menyimpan data laporan jentik/DBD baru ke tabel `reports` Supabase dan mengirim notifikasi email lokal ke subscriber terdekat.
-- `GET /api/stats`: Mengembalikan jumlah total laporan dan subscriber, serta menghitung total dampak pelestarian alam nilam secara dinamis.
-- `POST /api/subscribe`: Mendaftarkan email warga untuk menerima peringatan darurat otomatis dan mengirimkan email sambutan selamat bergabung.
-- `POST /api/broadcast?key=...`: Mengirim broadcast email peringatan siaga DBD massal ke seluruh email subscriber jika parameter admin key valid (`ADMIN_KEY`).
-- `POST /api/claim`: Memvalidasi kode kupon premium kemasan botol Patchmos dari tabel `premium_codes` Supabase dan mengubah statusnya menjadi digunakan.
+## 🔌 API Endpoints (FastAPI — backend/main.py)
 
-## 🔐 Panduan Konfigurasi (Environment Variables)
-- **Database**: Harus selalu menggunakan Supabase (`SUPABASE_URL` dan `SUPABASE_KEY`). Jangan menulis lagi ke `reports.db` (SQLite usang).
-- **Email System**: Peringatan darurat menggunakan `GMAIL_USER` dan `GMAIL_PASSWORD` (berupa 16 digit *App Password*).
-- **Admin**: Akses broadcast dan menu sensitif admin dilindungi oleh `ADMIN_KEY` (biasanya `kemenkes123`).
+### Publik (Tanpa Autentikasi)
+| Method | Route | Pydantic Model | Deskripsi |
+|--------|-------|----------------|-----------|
+| `GET` | `/api/mosqrisk?adm4=XX` | — | Ambil prakiraan cuaca BMKG → hitung skor risiko |
+| `GET` | `/api/stats` | — | Total laporan, subscriber, dampak lingkungan |
+| `POST` | `/api/reports` | `Report(locationName, reportType, description)` | Kirim laporan baru + trigger email |
+| `POST` | `/api/subscribe` | `Subscriber(locationName, email)` | Daftar email alert + welcome email |
+| `POST` | `/api/claim` | `ClaimRequest(code)` | Validasi kode premium kemasan |
+| `POST` | `/api/payment/token` | `PaymentRequest(name, phone, package, amount)` | Generate Midtrans Snap token |
+| `POST` | `/api/checkout/verify` | `CheckoutRequest(name, phone, package, paymentMethod)` | Verifikasi pembayaran |
 
-## ✍️ Guidelines Khusus AI Agent
-1. **Desain Visual**: Selalu gunakan warna primer `#1A3626` (hijau gelap) dan sekunder `#EAC775` (emas). Terapkan border-radius besar (seperti `rounded-2xl` atau `rounded-[2.5rem]`) untuk komponen kartu dan tombol agar terlihat elegan, modern, dan tidak kaku.
-2. **Efek Gambar**: Untuk gambar produk/siluet di background, manfaatkan Tailwind filters (blur, drop-shadow) dan efek perpaduan layer seperti `mix-blend-screen` atau `mix-blend-overlay` dengan opacity rendah untuk tampilan premium (lihat contoh di `checkout/page.tsx` atau `pantau/page.tsx`).
-3. **Validasi Lokasi**: Nama kota/kabupaten sering berbeda (misal "Kabupaten Aceh Besar" dengan "Aceh Besar"). Backend sudah memiliki fungsi `clean_loc()` untuk menangani standarisasi nama ini.
-4. **Database Client**: Jangan menggunakan SQLite. Selalu gunakan `supabase.table("nama_tabel")...` untuk operasi baca/tulis data.
-5. **Keamanan**: Seluruh aksi yang mengubah state global atau mengirim pesan massal harus divalidasi keamanannya di backend (`main.py`), **bukan** hanya di frontend.
+### Protected (Bearer Token = ADMIN_KEY)
+| Method | Route | Deskripsi |
+|--------|-------|-----------|
+| `POST` | `/api/admin/verify` | Verifikasi PIN admin |
+| `GET` | `/api/reports` | Ambil semua laporan |
+| `DELETE` | `/api/reports/{id}` | Hapus laporan |
+| `GET` | `/api/subscribe` | Ambil semua subscriber |
+| `DELETE` | `/api/subscribe/{id}` | Hapus subscriber |
+| `POST` | `/api/broadcast` | Kirim email peringatan massal |
+
+## 🔐 Environment Variables
+
+### Frontend (`frontend/.env`)
+```env
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+NEXT_PUBLIC_MIDTRANS_CLIENT_KEY=
+```
+
+### Backend (`backend/.env`)
+```env
+SUPABASE_URL=              # Supabase project URL
+SUPABASE_KEY=              # Service Role Key (bypass RLS)
+ADMIN_KEY=                 # PIN admin (default: kemenkes123)
+GMAIL_USER=                # Email pengirim notifikasi
+GMAIL_PASSWORD=            # Gmail App Password 16 digit
+MIDTRANS_SERVER_KEY=       # Midtrans server key
+MIDTRANS_CLIENT_KEY=       # Midtrans client key
+MIDTRANS_IS_PRODUCTION=    # true/false
+```
+
+## 🎨 Design System & Visual Rules
+1. **Warna Primer**: `#1A3626` (Deep Forest Green) — background utama, navbar, card.
+2. **Warna Aksen**: `#EAC775` (Gold) — tombol CTA, badge premium, highlight.
+3. **Background Gelap**: `#0c1f13` — area konten utama (pantau, checkout).
+4. **Font**: `Plus Jakarta Sans` (Google Fonts) — satu-satunya font yang dipakai.
+5. **Border Radius**: Gunakan `rounded-2xl` atau `rounded-[2.5rem]` untuk tampilan premium.
+6. **Efek Visual**: Glassmorphism (`backdrop-blur`, `bg-opacity`), gradient overlays, `mix-blend-screen`.
+7. **Animasi**: Framer Motion untuk page transitions, `RevealOnScroll` untuk scroll-based reveals.
+8. **Ikon**: Google Material Symbols (via `<span className="material-symbols-outlined">`).
+
+## ⚙️ Technical Notes & Known Constraints
+
+### Supabase & RLS
+- RLS (Row Level Security) aktif di semua tabel Supabase.
+- Frontend menggunakan **Anon Key** (read publik terbatas).
+- Backend menggunakan **Service Role Key** (bypass RLS untuk admin CRUD).
+- Semua operasi tulis/hapus admin **HARUS** melalui backend FastAPI.
+
+### Midtrans Integration
+- Layout.tsx memuat Midtrans Snap JS via `<script>` tag.
+- Backend `/api/payment/token` generate Snap token → frontend buka popup `window.snap.pay()`.
+- Saat ini menggunakan **Sandbox** URL. Ganti ke production saat deploy final.
+
+### PWA
+- Dikonfigurasi via `@ducanh2912/next-pwa` di `next.config.ts`.
+- Manifest di `public/manifest.json`.
+- Disabled saat development (`NODE_ENV === "development"`).
+
+### Build & Deploy
+- `next.config.ts` sudah dikonfigurasi `eslint.ignoreDuringBuilds: true` dan `typescript.ignoreBuildErrors: true` agar build Vercel tidak gagal karena warnings.
+- API rewrites: Development → `127.0.0.1:8000`, Production → rewrites ke diri sendiri (perlu backend terpisah).
+
+## ✍️ Guidelines untuk AI Agent
+
+1. **JANGAN** pernah menulis ke SQLite (`reports.db`). Selalu gunakan Supabase.
+2. **JANGAN** menghapus komentar atau docstring yang sudah ada kecuali diminta user.
+3. **JANGAN** memindahkan atau menghapus `frontend/lib/supabase.ts` — file ini sempat hilang dari git karena `.gitignore`, sudah diperbaiki.
+4. **Selalu** gunakan warna tema (`#1A3626`, `#EAC775`) — jangan warna generik.
+5. **Validasi lokasi**: Nama kota sering berbeda antara sumber data. Backend `clean_loc()` sudah menangani standardisasi.
+6. **Aksi sensitif**: Semua aksi yang mengubah state global (hapus data, broadcast) harus divalidasi di backend, bukan hanya di frontend.
+7. **Hardcoded colors**: Banyak warna masih inline di komponen. Idealnya dipindah ke CSS variables, tapi untuk saat ini ikuti pola yang sudah ada.
+8. **Premium check**: Saat ini status premium disimpan di `localStorage`. Ini adalah known limitation — belum ada validasi server-side.
