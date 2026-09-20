@@ -33,7 +33,7 @@ const MosquitoCycle = () => {
   const steps = [
     { num: "01", title: "Telur", desc: "Diletakkan di dinding wadah berisi air. Bertahan kering berbulan-bulan, menunggu air menetas.", detail: "~100 telur per siklus", emoji: "🥚" },
     { num: "02", title: "Jentik (Larva)", desc: "Hidup di air tenang selama 5-10 hari. Target utama program 3M karena sangat mudah dibasmi.", detail: "5-10 hari di air", emoji: "🪱" },
-    { num: "03", title: "Pupa", desc: "Fase istirahat 1-2 hari. Pupa tidak makan, hanya bernapas di permukaan air sebelum berubah menjadi nyamuk.", detail: "1-2 hari transformasi", emoji: "🫘" },
+    { num: "03", title: "Pupa", desc: "Fase istirahat 2-4 hari. Pupa tidak makan, hanya bernapas di permukaan air sebelum berubah menjadi nyamuk.", detail: "2-4 hari transformasi", emoji: "🫘" },
     { num: "04", title: "Nyamuk Dewasa", desc: "Betina menggigit manusia untuk protein darah. Sangat aktif pada pagi (08-10) dan sore (16-18) hari.", detail: "Hidup 2-4 minggu", emoji: "🦟" },
   ];
 
@@ -98,6 +98,7 @@ const MosquitoCycle = () => {
 export default function EdukasiPage() {
   const [isMounted, setIsMounted] = useState(false);
   const [climateData, setClimateData] = useState([]);
+  const [climatePeriod, setClimatePeriod] = useState('');
   const [isLoadingChart, setIsLoadingChart] = useState(true);
 
   useEffect(() => {
@@ -109,11 +110,22 @@ export default function EdukasiPage() {
     const fetchClimateData = async (lat: number, lon: number) => {
       try {
         setIsLoadingChart(true);
-        const res = await fetch(`http://127.0.0.1:8000/api/climate-trend?lat=${lat}&lon=${lon}`);
+        // Bulatkan koordinat ke 2 desimal agar konsisten
+        const roundedLat = Math.round(lat * 100) / 100;
+        const roundedLon = Math.round(lon * 100) / 100;
+        
+        // Simpan ke localStorage agar refresh berikutnya konsisten
+        try {
+          localStorage.setItem('edukasi_lat', String(roundedLat));
+          localStorage.setItem('edukasi_lon', String(roundedLon));
+        } catch(e) { /* ignore */ }
+        
+        const res = await fetch(`http://127.0.0.1:8000/api/climate-trend?lat=${roundedLat}&lon=${roundedLon}`);
         const result = await res.json();
         
         if (result.success && result.data) {
           setClimateData(result.data);
+          if (result.period) setClimatePeriod(result.period);
         } else {
           console.error("API Error:", result.error);
         }
@@ -124,6 +136,17 @@ export default function EdukasiPage() {
       }
     };
 
+    // Cek apakah sudah ada koordinat tersimpan
+    try {
+      const cachedLat = localStorage.getItem('edukasi_lat');
+      const cachedLon = localStorage.getItem('edukasi_lon');
+      if (cachedLat && cachedLon) {
+        fetchClimateData(parseFloat(cachedLat), parseFloat(cachedLon));
+        return;
+      }
+    } catch(e) { /* ignore */ }
+
+    // Jika belum ada, ambil dari GPS
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
@@ -133,98 +156,92 @@ export default function EdukasiPage() {
           console.log("GPS denied/timeout, fallback to Jakarta");
           fetchClimateData(-6.20, 106.81);
         },
-        { timeout: 5000 }
+        { timeout: 15000, maximumAge: 300000 }
       );
     } else {
       fetchClimateData(-6.20, 106.81);
     }
   }, []);
 
+  // Hitung bulan dengan risiko tertinggi untuk highlight
+  const peakMonth = climateData.length > 0
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ? climateData.reduce((prev: any, curr: any) => (curr.risiko > prev.risiko ? curr : prev), climateData[0])
+    : null;
+
   return (
     <div className="w-full flex flex-col min-h-screen font-['Plus_Jakarta_Sans'] antialiased">
       <Navbar />
 
       {/* ═══════════════════════════════════════════════════════════ */}
-      {/* SEKSI 2 — APA ITU DBD? (with mosquito image) */}
+      {/* HERO SECTION — APA ITU DBD? */}
       {/* ═══════════════════════════════════════════════════════════ */}
-      <section id="seksi-dbd" className="pt-40 pb-20 md:pt-40 md:pb-28 bg-[#F4F7F4] relative overflow-hidden">
-        <div className="absolute right-0 top-1/2 -translate-y-1/2 opacity-[0.03] pointer-events-none">
-          <span className="material-symbols-outlined text-[300px]">pest_control</span>
+      <section id="seksi-dbd" className="relative w-full min-h-[90vh] flex items-center justify-center pt-20 pb-16 overflow-hidden">
+        {/* Full Background Image */}
+        <div className="absolute inset-0 z-0">
+          <Image
+            src="/aedes-aegypti.jpg"
+            alt="Nyamuk Aedes aegypti"
+            fill
+            className="object-cover object-center"
+            priority
+            quality={90}
+          />
+          {/* Gradient Overlay to make text readable */}
+          <div className="absolute inset-0 bg-gradient-to-r from-[#0c1a12] via-[#1A3626]/80 to-[#1A3626]/40" />
+          <div className="absolute inset-0 bg-black/40" />
         </div>
         
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 w-full flex flex-col items-center text-center mt-10">
           <RevealOnScroll>
-            <div className="text-center mb-14">
-              <h2 className="text-4xl md:text-5xl font-extrabold text-[#1A3626] tracking-tight">
-                Apa Itu <span className="text-[#E07A5F]">Demam Berdarah</span>?
-              </h2>
-            </div>
-          </RevealOnScroll>
-
-          <RevealOnScroll delay={100}>
-            <div className="bg-white rounded-3xl shadow-lg border border-gray-100 overflow-hidden mb-10">
-              <div className="grid grid-cols-1 lg:grid-cols-5 gap-0">
-                {/* Image Column */}
-                <div className="lg:col-span-2 relative min-h-[300px] lg:min-h-full">
-                  <Image
-                    src="/aedes-aegypti.jpg"
-                    alt="Nyamuk Aedes aegypti - penyebab Demam Berdarah Dengue"
-                    fill
-                    className="object-cover"
-                    quality={85}
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent lg:bg-gradient-to-r" />
-                  <div className="absolute bottom-4 left-4 right-4 lg:bottom-6 lg:left-6">
-                    <span className="bg-red-500 text-white text-[11px] font-bold px-3 py-1.5 rounded-full uppercase tracking-wider">
-                      Aedes aegypti
-                    </span>
-                    <p className="text-white/90 text-xs mt-2 leading-relaxed max-w-[200px]">
-                      Nyamuk bercorak hitam-putih yang menjadi vektor utama penyakit DBD di Indonesia.
-                    </p>
-                  </div>
+            <div className="flex flex-col items-center">
+              <h1 className="text-5xl md:text-6xl lg:text-8xl font-extrabold text-white tracking-tight mb-8 leading-tight">
+                Apa Itu <span className="text-[#E07A5F]">Demam Berdarah?</span>
+              </h1>
+              
+              <p className="text-gray-200 leading-relaxed text-lg md:text-xl mb-12 max-w-3xl mx-auto font-light">
+                <strong>Demam Berdarah Dengue (DBD)</strong> adalah penyakit yang ditularkan melalui gigitan nyamuk <em>Aedes aegypti</em> yang terinfeksi virus dengue. Penyakit ini merupakan ancaman kesehatan terbesar di daerah tropis.
+              </p>
+              
+              <div className="flex flex-col md:flex-row gap-6 justify-center items-stretch w-full max-w-5xl mx-auto">
+                {/* Warning Card */}
+                <div className="bg-red-500/10 border border-red-500/30 backdrop-blur-md rounded-2xl p-6 flex-1 text-left">
+                  <h4 className="font-bold text-red-400 text-sm mb-3 flex items-center gap-2">
+                    <span className="material-symbols-outlined text-[20px]">warning</span>
+                    Fase Kritis (Hari ke-3 s/d ke-7)
+                  </h4>
+                  <p className="text-red-100/90 text-[15px] leading-relaxed">
+                    Pada fase ini trombosit turun drastis dan risiko perdarahan meningkat. 
+                    Segera ke rumah sakit jika suhu tubuh anak Anda tiba-tiba turun namun kondisinya terlihat memburuk.
+                  </p>
                 </div>
 
-                {/* Text Content Column */}
-                <div className="lg:col-span-3 p-8 md:p-10">
-                  <h3 className="text-xl font-bold text-[#1A3626] mb-4">Definisi</h3>
-                  <p className="text-[#414844] leading-relaxed text-[15px] mb-6">
-                    <strong>Demam Berdarah Dengue (DBD)</strong> adalah penyakit yang ditularkan melalui 
-                    gigitan nyamuk <em>Aedes aegypti</em> yang terinfeksi virus dengue. Penyakit ini merupakan 
-                    salah satu masalah kesehatan masyarakat terbesar di Indonesia, terutama di daerah tropis 
-                    dengan kelembapan tinggi.
-                  </p>
-                  
-                  <div className="bg-red-50 border border-red-100 rounded-2xl p-5 mb-6">
-                    <h4 className="font-bold text-red-800 text-sm mb-2 flex items-center gap-2">
-                      <span className="material-symbols-outlined text-[18px]">warning</span>
-                      Fase Kritis (Hari ke-3 s/d ke-7)
-                    </h4>
-                    <p className="text-red-700 text-[14px] leading-relaxed">
-                      Pada fase ini trombosit turun drastis dan risiko perdarahan meningkat. 
-                      Segera ke rumah sakit jika suhu turun tapi kondisi memburuk.
-                    </p>
+                {/* Stats */}
+                <div className="grid grid-cols-2 gap-4 flex-1">
+                  <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-6 flex flex-col justify-center">
+                    <p className="text-3xl md:text-5xl font-black text-[#EAC775]">161.752</p>
+                    <p className="text-gray-300 text-sm md:text-base mt-2 font-medium">Kasus DBD 2025</p>
                   </div>
-
-                  {/* Stats */}
-                  <div className="bg-gradient-to-br from-[#1A3626] to-[#0c1a12] rounded-2xl p-6 text-white">
-                    <h4 className="text-sm font-bold text-[#EAC775] uppercase tracking-widest mb-3">Statistik Indonesia 2025</h4>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="bg-white/10 rounded-xl p-4 text-center">
-                        <p className="text-2xl md:text-3xl font-extrabold text-[#EAC775]">161.752</p>
-                        <p className="text-white/70 text-[12px] mt-1">Kasus DBD</p>
-                      </div>
-                      <div className="bg-white/10 rounded-xl p-4 text-center">
-                        <p className="text-2xl md:text-3xl font-extrabold text-[#EAC775]">443.530</p>
-                        <p className="text-white/70 text-[12px] mt-1">Kasus Malaria</p>
-                      </div>
+                  <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-6 flex flex-col justify-center relative overflow-hidden">
+                    <div className="absolute -right-4 -bottom-4 opacity-10 pointer-events-none">
+                       <span className="material-symbols-outlined text-[100px]">coronavirus</span>
                     </div>
-                    <p className="text-white/50 text-[11px] mt-3 text-center">Sumber: Kemenkes RI, 2025</p>
+                    <p className="text-3xl md:text-5xl font-black text-[#EAC775]">706.297</p>
+                    <p className="text-gray-300 text-sm md:text-base mt-2 font-medium">Kasus Malaria 2025</p>
                   </div>
                 </div>
               </div>
+              <p className="text-gray-400 text-xs mt-6 text-center w-full">Sumber: Kementerian Kesehatan Republik Indonesia, Proyeksi Kasus 2025</p>
             </div>
           </RevealOnScroll>
+        </div>
+      </section>
 
+      {/* ═══════════════════════════════════════════════════════════ */}
+      {/* SEKSI GEJALA & LAINNYA */}
+      {/* ═══════════════════════════════════════════════════════════ */}
+      <section className="py-20 md:py-28 bg-[#F4F7F4] relative overflow-hidden">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
           {/* Gejala Grid */}
           <RevealOnScroll delay={200}>
             <h3 className="text-2xl font-extrabold text-[#1A3626] mb-8 text-center">
@@ -280,7 +297,7 @@ export default function EdukasiPage() {
                 <h4 className="font-bold text-[#1A3626] mb-1">Tahukah Anda?</h4>
                 <p className="text-[#414844] text-[15px] leading-relaxed">
                   Nyamuk <em>Aedes aegypti</em> berkembang biak optimal pada suhu <strong>26-30°C</strong> dan 
-                  kelembapan <strong>≥80%</strong> — parameter inilah yang diukur otomatis oleh <strong>MosqRisk Analytics</strong>.
+                  kelembapan <strong>≥70%</strong> — parameter inilah yang diukur otomatis oleh <strong>MosqRisk Analytics</strong>.
                 </p>
               </div>
             </div>
@@ -500,9 +517,12 @@ export default function EdukasiPage() {
             <div className="bg-white rounded-3xl shadow-lg border border-gray-100 p-8 md:p-10 mb-8">
               <div className="mb-8">
                 <h3 className="text-2xl font-bold text-[#1A3626] mb-2 text-center">Tren Curah Hujan vs Risiko DBD</h3>
+                {climatePeriod && (
+                  <p className="text-[#E07A5F] font-semibold text-sm text-center mb-1">📅 Periode: {climatePeriod}</p>
+                )}
                 <p className="text-[#414844] text-[14px] text-center max-w-2xl mx-auto">
-                  Grafik simulasi ini menunjukkan korelasi historis antara tingginya curah hujan (warna biru) 
-                  dan peningkatan drastis skor risiko penyebaran nyamuk (warna emas).
+                  Data historis aktual dari Open-Meteo menunjukkan korelasi antara tingginya curah hujan 
+                  dan peningkatan skor risiko penyebaran nyamuk di daerah Anda.
                 </p>
               </div>
               <div className="h-[400px] w-full relative flex items-center justify-center">
@@ -538,6 +558,36 @@ export default function EdukasiPage() {
                   </ResponsiveContainer>
                 )}
               </div>
+
+              {/* Highlight Bulan Puncak Risiko */}
+              {peakMonth && !isLoadingChart && (
+                <div className="mt-6 bg-gradient-to-r from-red-50 via-orange-50 to-amber-50 border border-red-200/60 rounded-2xl p-6 flex flex-col md:flex-row items-center gap-6">
+                  <div className="flex-shrink-0 w-16 h-16 rounded-2xl bg-gradient-to-br from-[#E07A5F] to-red-600 flex items-center justify-center shadow-lg shadow-red-200">
+                    <span className="material-symbols-outlined text-white text-3xl">crisis_alert</span>
+                  </div>
+                  <div className="flex-1 text-center md:text-left">
+                    <p className="text-xs font-bold text-red-500 uppercase tracking-widest mb-1">⚠️ Bulan Puncak Risiko Tertinggi</p>
+                    <h4 className="text-2xl font-extrabold text-[#1A3626]">{peakMonth.name}</h4>
+                    <p className="text-[#414844] text-sm mt-1">
+                      Bulan dengan risiko penyebaran nyamuk DBD tertinggi dalam 12 bulan terakhir di wilayah Anda.
+                    </p>
+                  </div>
+                  <div className="flex gap-3 flex-shrink-0">
+                    <div className="bg-white rounded-xl px-4 py-3 text-center shadow-sm border border-gray-100">
+                      <p className="text-2xl font-black text-[#E07A5F]">{peakMonth.risiko}</p>
+                      <p className="text-[11px] text-gray-500 font-medium">Skor Risiko</p>
+                    </div>
+                    <div className="bg-white rounded-xl px-4 py-3 text-center shadow-sm border border-gray-100">
+                      <p className="text-2xl font-black text-blue-600">{peakMonth.hujan}</p>
+                      <p className="text-[11px] text-gray-500 font-medium">mm Hujan</p>
+                    </div>
+                    <div className="bg-white rounded-xl px-4 py-3 text-center shadow-sm border border-gray-100">
+                      <p className="text-2xl font-black text-[#1A3626]">{peakMonth.suhu}°</p>
+                      <p className="text-[11px] text-gray-500 font-medium">Rata-rata</p>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </RevealOnScroll>
         </div>
@@ -578,7 +628,7 @@ export default function EdukasiPage() {
                   Dari Limbah Menjadi <span className="text-[#EAC775]">Pelindung</span>
                 </h3>
                 <p className="text-white/80 text-[15px] md:text-[17px] max-w-2xl leading-relaxed">
-                  Indonesia menguasai 95% pasar minyak nilam dunia. Ampas nilam yang sebelumnya terbuang, 
+                  Indonesia menguasai 90% pasar minyak nilam dunia. Ampas nilam yang sebelumnya terbuang, 
                   kini diolah menjadi bio-repellent alami yang aman dan 100% bebas DEET kimia.
                 </p>
               </div>
@@ -593,7 +643,7 @@ export default function EdukasiPage() {
                   Mengapa Memilih Nilam?
                 </h3>
                 <p className="text-[#414844] text-[15px] leading-relaxed mb-8">
-                  Ampas nilam masih mengandung senyawa <strong>Patchouli alcohol</strong> yang terbukti klinis efektif 
+                  Ampas nilam masih mengandung senyawa <strong>Patchouli alcohol</strong> yang terbukti secara laboratorium efektif 
                   menolak gigitan nyamuk. Pendekatan ini mendukung konsep <em>circular economy</em> bagi petani di Aceh.
                 </p>
                 <div className="space-y-4">
@@ -631,7 +681,7 @@ export default function EdukasiPage() {
                     { icon: "block", title: "100% Bebas Bahan DEET", desc: "Aman untuk bayi, ibu hamil, dan kulit sangat sensitif." },
                     { icon: "timer", title: "Proteksi Kuat 6 Jam", desc: "Formulasi mikroenkapsulasi menjaga molekul penolak menguap perlahan." },
                     { icon: "recycling", title: "Zero Waste Product", desc: "Produk ramah lingkungan 100% dari ampas daur ulang (upcycled)." },
-                    { icon: "health_and_safety", title: "Uji Klinis Terbukti", desc: "Efektif 92,5% mengusir nyamuk di daerah tropis tanpa lengket." },
+                    { icon: "health_and_safety", title: "Teruji Laboratorium", desc: "Estimasi berdasarkan literatur akademik terbukti efektif mengusir nyamuk." },
                   ].map((item, i) => (
                     <div key={i} className="flex items-start gap-4 bg-white/5 rounded-2xl p-4 border border-white/10 hover:bg-white/10 transition-colors backdrop-blur-sm">
                       <div className="w-12 h-12 rounded-xl bg-[#EAC775]/20 border border-[#EAC775]/30 flex items-center justify-center shrink-0">

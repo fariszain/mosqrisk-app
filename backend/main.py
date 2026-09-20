@@ -5,7 +5,7 @@ from fastapi import FastAPI, Query, BackgroundTasks, Depends, HTTPException, sta
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
 import requests
-from datetime import datetime
+from datetime import datetime, timedelta
 import os
 from pydantic import BaseModel
 import smtplib
@@ -87,31 +87,46 @@ def verify_admin(credentials: HTTPAuthorizationCredentials = Depends(security)):
 BASE_URL = "https://api.bmkg.go.id/publik/prakiraan-cuaca?adm4="
 
 def calculate_mosquito_risk(temp, humidity, precipitation=0.0):
-    # Base logic (Kemenkes / WHO style)
-    # Suhu ideal: 26-30C (Bobot 40)
+    import math
+    
+    # ─── FAKTOR 1: SUHU (Bobot 40%) — Gaussian Asimetris ───
+    # Konsisten dengan formula bulanan (titik optimal 28.0°C)
     temp_score = 0
     if temp is not None:
-        if 26 <= temp <= 30: temp_score = 40
-        elif 24 <= temp < 26 or 30 < temp <= 32: temp_score = 25
-        else: temp_score = 10
+        optimal_temp = 28.0
+        sigma = 5.0 if temp <= optimal_temp else 2.5
+        temp_score = math.exp(-0.5 * ((temp - optimal_temp) / sigma) ** 2) * 40
 
-    # Kelembapan ideal: > 75% (Bobot 30)
+    # ─── FAKTOR 2: KELEMBAPAN (Bobot 25%) — Linear bertahap ───
+    # Konsisten dengan formula bulanan
     hum_score = 0
     if humidity is not None:
-        if humidity >= 80: hum_score = 30
-        elif 70 <= humidity < 80: hum_score = 20
-        else: hum_score = 10
-        
-    # Curah Hujan ideal: 1 - 20 mm (membentuk genangan, Bobot 30). Jika hujan lebat >20mm jentik tersapu.
+        if humidity >= 80:
+            hum_score = 25
+        elif humidity >= 60:
+            hum_score = ((humidity - 60) / 20) * 25
+        else:
+            hum_score = max(0, (humidity / 60)) * 10
+            
+    # ─── FAKTOR 3: CURAH HUJAN HARIAN (Bobot 35%) ───
+    # Berbeda dengan tren bulanan (yang butuh 150-300mm/bulan),
+    # data BMKG ini adalah hujan HARIAN. 
+    # Hujan rintik/sedang (1 - 15 mm/hari) sangat ideal membuat genangan.
+    # Hujan lebat (>30 mm/hari) justru menghanyutkan jentik (flushing effect).
     precip_score = 0
     if precipitation is not None:
-        if 0.5 <= precipitation <= 20: precip_score = 30
-        elif precipitation > 20: precip_score = 15
-        else: precip_score = 10
-        
-    score = temp_score + hum_score + precip_score
+        if precipitation == 0:
+            precip_score = 10  # Kering, genangan lama mungkin masih ada tapi tidak bertambah
+        elif 0.5 <= precipitation <= 20:
+            precip_score = 35  # Ideal
+        elif 20 < precipitation <= 35:
+            precip_score = 20  # Mulai terlalu lebat
+        else:
+            precip_score = 5   # Flushing effect kuat
+            
+    score = int(round(temp_score + hum_score + precip_score))
+    score = min(max(score, 5), 100)
     
-    score = min(score, 100)
     category = "TINGGI" if score >= 75 else "SEDANG" if score >= 50 else "RENDAH"
     return score, category
 
@@ -223,13 +238,30 @@ async def get_mosqrisk_data(adm4: str = Query(..., description="Kode ADM4 BPS (c
 async def get_climate_trend(lat: float = Query(...), lon: float = Query(...)):
     """Endpoint untuk mendapatkan tren iklim 12 bulan terakhir dari Open-Meteo"""
     try:
-        # Tentukan rentang 1 tahun terakhir (Tahun lalu agar kalender lengkap)
-        last_year = datetime.now().year - 1
-        start_date = f"{last_year}-01-01"
-        end_date = f"{last_year}-12-31"
+        import math
+        from dateutil.relativedelta import relativedelta
         
-        # URL Open-Meteo Archive API
-        url = f"https://archive-api.open-meteo.com/v1/archive?latitude={lat}&longitude={lon}&start_date={start_date}&end_date={end_date}&daily=temperature_2m_mean,precipitation_sum&timezone=Asia%2FJakarta"
+        # Rolling 12 bulan terakhir
+        now = datetime.now()
+        end_dt = now.replace(day=1) - timedelta(days=1)
+        start_dt = (end_dt.replace(day=1) - relativedelta(months=11))
+        
+        start_date = start_dt.strftime("%Y-%m-%d")
+        end_date = end_dt.strftime("%Y-%m-%d")
+        
+        # Label periode
+        months_indo_full = ["Januari", "Februari", "Maret", "April", "Mei", "Juni",
+                            "Juli", "Agustus", "September", "Oktober", "November", "Desember"]
+        period_label = f"{months_indo_full[start_dt.month-1]} {start_dt.year} – {months_indo_full[end_dt.month-1]} {end_dt.year}"
+        
+        # Open-Meteo Archive API — dengan kelembapan + kecepatan angin
+        url = (
+            f"https://archive-api.open-meteo.com/v1/archive?"
+            f"latitude={lat}&longitude={lon}"
+            f"&start_date={start_date}&end_date={end_date}"
+            f"&daily=temperature_2m_mean,precipitation_sum,relative_humidity_2m_mean,windspeed_10m_mean"
+            f"&timezone=Asia%2FJakarta"
+        )
         
         headers = {'User-Agent': 'MosqRisk-Engine/1.0'}
         response = requests.get(url, headers=headers, timeout=30)
@@ -241,49 +273,120 @@ async def get_climate_trend(lat: float = Query(...), lon: float = Query(...)):
         times = daily.get("time", [])
         temps = daily.get("temperature_2m_mean", [])
         precips = daily.get("precipitation_sum", [])
+        humids = daily.get("relative_humidity_2m_mean", [])
+        winds = daily.get("windspeed_10m_mean", [])
         
         if not times:
             return {"success": False, "error": "No daily data returned from Open-Meteo"}
-            
-        # Agregasi ke bulanan
+        
+        # Agregasi ke bulanan (key = "YYYY-MM")
         monthly_data = {}
         for i, date_str in enumerate(times):
-            month_idx = int(date_str.split("-")[1])
-            if month_idx not in monthly_data:
-                monthly_data[month_idx] = {"temps": [], "precips": []}
+            key = date_str[:7]
+            if key not in monthly_data:
+                monthly_data[key] = {"temps": [], "precips": [], "humids": [], "winds": []}
                 
             if i < len(temps) and temps[i] is not None:
-                monthly_data[month_idx]["temps"].append(temps[i])
+                monthly_data[key]["temps"].append(temps[i])
             if i < len(precips) and precips[i] is not None:
-                monthly_data[month_idx]["precips"].append(precips[i])
-                
-        # Hitung rata-rata dan skor untuk setiap bulan
+                monthly_data[key]["precips"].append(precips[i])
+            if i < len(humids) and humids[i] is not None:
+                monthly_data[key]["humids"].append(humids[i])
+            if i < len(winds) and winds[i] is not None:
+                monthly_data[key]["winds"].append(winds[i])
+        
+        sorted_keys = sorted(monthly_data.keys())
         months_indo = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Ags", "Sep", "Okt", "Nov", "Des"]
         
         trend = []
-        for m in range(1, 13):
-            m_data = monthly_data.get(m, {"temps": [], "precips": []})
+        for key in sorted_keys:
+            m_data = monthly_data[key]
+            month_num = int(key.split("-")[1])
+            year_num = int(key.split("-")[0])
             
             avg_temp = sum(m_data["temps"]) / len(m_data["temps"]) if m_data["temps"] else 28.0
             sum_precip = sum(m_data["precips"]) if m_data["precips"] else 0.0
+            avg_humid = sum(m_data["humids"]) / len(m_data["humids"]) if m_data["humids"] else 75.0
+            avg_wind = sum(m_data["winds"]) / len(m_data["winds"]) if m_data["winds"] else 8.0
             
-            # Buat perhitungan risiko dinamis khusus tren historis agar grafik tidak datar 100
-            # Karena rata-rata bulanan meratakan hari-hari ekstrem, kita buat proksi risiko:
-            rain_factor = min(sum_precip / 250.0, 1.0) * 55  # Max 55 poin dari hujan
-            temp_factor = 45 if 26 <= avg_temp <= 29 else 25 # Max 45 poin dari suhu ideal
+            # ══════════════════════════════════════════════════════════════
+            # RUMUS SKOR RISIKO DBD v2.0 (Revisi Peer-Review)
+            # ══════════════════════════════════════════════════════════════
+            #
+            # Referensi:
+            # - Mordecai et al. (2017): Thermal Biology of Mosquito-Borne Disease
+            #   → Puncak transmisi DENV×Ae.aegypti di 29.1°C, batas 17.8-34.5°C
+            # - Liu-Helmersson et al. (2014): Vectorial capacity model
+            #   → Puncak epidemi dengue di ~29.3°C
+            # - Studi proyeksi iklim-DBD DKI Jakarta
+            #   → Curah hujan "sesuai DBD" di rentang 100-300mm/bulan
+            # - Studi time-series Singapura/Bangkok
+            #   → Angin kencang mengganggu kemampuan terbang Aedes
+            #
+            # Bobot: Suhu 40%, Hujan 35%, Kelembapan 25%
+            # Suhu dinaikkan bobotnya karena memengaruhi hampir seluruh
+            # tahap biologi nyamuk DAN virus (EIP, biting rate, survival).
+            # Hujan diturunkan karena efeknya lebih tidak langsung &
+            # dimoderasi perilaku penyimpanan air warga urban Indonesia.
             
-            score = int(rain_factor + temp_factor)
-            score = min(max(score, 15), 100) # Pastikan di antara 15-100
+            # ─── FAKTOR 1: SUHU (40%) — Gaussian Asimetris ───
+            # Kurva performa termal Ae.aegypti asimetris:
+            # Dari puncak ke batas bawah (17.8°C): landai (jarak 11.3°C)
+            # Dari puncak ke batas atas (34.5°C): curam (jarak 5.4°C)
+            # → σ_low=5.0, σ_high=2.5 (rasio ~2:1)
+            optimal_temp = 28.0  # Konsensus 26-29°C, titik tengah pragmatis
+            sigma = 5.0 if avg_temp <= optimal_temp else 2.5
+            temp_score = math.exp(-0.5 * ((avg_temp - optimal_temp) / sigma) ** 2) * 40
+            
+            # ─── FAKTOR 2: CURAH HUJAN (35%) — Sigmoid + Flushing ───
+            # Infleksi di 150mm, mulai menurun di 300mm (bukan 400mm)
+            # Studi DKI Jakarta: rentang "sesuai DBD" = 100-300mm
+            # Studi Singapura: flushing effect menurunkan insiden dengue
+            if sum_precip <= 300:
+                rain_score = (1 / (1 + math.exp(-0.02 * (sum_precip - 150)))) * 35
+            else:
+                peak_rain = (1 / (1 + math.exp(-0.02 * (300 - 150)))) * 35
+                excess = (sum_precip - 300) / 300
+                rain_score = peak_rain * max(0.7, 1 - excess * 0.3)
+            
+            # ─── FAKTOR 3: KELEMBAPAN (25%) — Linear bertahap ───
+            # Ae.aegypti butuh RH >60%, optimal 70-85%
+            # Tidak diubah — sudah sesuai literatur
+            if avg_humid >= 80:
+                humid_score = 25
+            elif avg_humid >= 60:
+                humid_score = ((avg_humid - 60) / 20) * 25
+            else:
+                humid_score = max(0, (avg_humid / 60)) * 10
+            
+            # ─── MODIFIER: KECEPATAN ANGIN (pengali 0.85–1.0) ───
+            # Angin kencang mengganggu kemampuan terbang & mencari inang
+            # Diterapkan sebagai modifier kecil, bukan pilar bobot baru
+            # (bukti kuantitatif belum se-matang suhu & hujan)
+            if avg_wind <= 10:
+                wind_mod = 1.0
+            elif avg_wind <= 25:
+                wind_mod = 1.0 - ((avg_wind - 10) / 15) * 0.15
+            else:
+                wind_mod = 0.85
+            
+            raw_score = (temp_score + rain_score + humid_score) * wind_mod
+            score = min(max(int(round(raw_score)), 5), 100)
+            
+            label = f"{months_indo[month_num-1]} '{str(year_num)[2:]}"
             
             trend.append({
-                "name": months_indo[m-1],
-                "hujan": round(sum_precip, 1), # Untuk grafik, kita tampilkan total hujannya
+                "name": label,
+                "hujan": round(sum_precip, 1),
                 "suhu": round(avg_temp, 1),
+                "kelembapan": round(avg_humid, 1),
+                "angin": round(avg_wind, 1),
                 "risiko": score
             })
             
         return {
             "success": True,
+            "period": period_label,
             "data": trend
         }
     except Exception as e:
