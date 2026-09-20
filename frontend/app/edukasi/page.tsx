@@ -82,9 +82,9 @@ const MosquitoCycle = () => {
       {/* Active Content Card */}
       <div className="flex-1 w-full max-w-lg">
         <div className="bg-white border border-gray-100 p-8 md:p-10 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] relative overflow-hidden h-full transition-all duration-500">
-          <div className="text-[120px] font-black text-[#1A3626]/5 absolute -right-8 -top-8 leading-none">{steps[activeStep].num}</div>
-          <h3 className="text-3xl font-extrabold text-[#1A3626] mb-4 relative z-10">{steps[activeStep].title}</h3>
-          <p className="text-[#414844] text-lg leading-relaxed mb-8 relative z-10 min-h-[90px]">{steps[activeStep].desc}</p>
+          <div className="text-[100px] font-black text-[#1A3626]/5 absolute right-4 top-4 leading-none select-none pointer-events-none">{steps[activeStep].num}</div>
+          <h3 className="text-3xl font-extrabold text-[#1A3626] mb-4 relative z-10 pr-16">{steps[activeStep].title}</h3>
+          <p className="text-[#414844] text-lg leading-relaxed mb-8 relative z-10 min-h-[90px] pr-12">{steps[activeStep].desc}</p>
           <div className="inline-flex items-center gap-2 bg-[#F4F7F4] px-4 py-2 rounded-full border border-green-100 text-[#1A3626] text-[13px] font-bold relative z-10">
             <span className="material-symbols-outlined text-lg text-[#EAC775]">info</span>
             {steps[activeStep].detail}

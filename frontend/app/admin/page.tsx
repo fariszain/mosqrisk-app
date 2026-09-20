@@ -7,24 +7,29 @@ import { toast } from 'react-hot-toast';
 interface Report {
   id: number;
   report_type?: string;
+  location_name?: string;
+  description?: string;
+  created_at: string;
   [key: string]: unknown;
 }
 
 interface Subscriber {
   id: number;
   email?: string;
+  location_name?: string;
+  created_at: string;
   [key: string]: unknown;
 }
 
 const ExportButton = ({ onClick }: { onClick: () => void }) => (
-  <button onClick={onClick} className="bg-gray-50 text-gray-600 border border-gray-200 px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-gray-100 transition-colors">
+  <button onClick={onClick} className="bg-white text-gray-700 border border-gray-200 px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-gray-50 hover:text-gray-900 transition-all shadow-sm">
     <span className="material-symbols-outlined text-[18px]">download</span> Export CSV
   </button>
 );
 
 const DeleteButton = ({ onClick, title }: { onClick: () => void, title: string }) => (
-  <button onClick={onClick} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors" title={title}>
-    <span className="material-symbols-outlined text-sm">delete</span>
+  <button onClick={onClick} className="p-2 flex items-center justify-center text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all" title={title}>
+    <span className="material-symbols-outlined text-[18px]">delete</span>
   </button>
 );
 
@@ -32,6 +37,7 @@ export default function AdminDashboard() {
   const [reports, setReports] = useState<Report[]>([]);
   const [subscribers, setSubscribers] = useState<Subscriber[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
   
   // Security State
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -85,6 +91,16 @@ export default function AdminDashboard() {
       clearTimeout(t);
     });
   }, [isAuthenticated, pin]);
+
+  const filteredReports = reports.filter(r => 
+    String(r.location_name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+    String(r.description || '').toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const filteredSubscribers = subscribers.filter(s => 
+    String(s.location_name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+    String(s.email || '').toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   const totalReports = reports.length;
   const dbdCases = reports.filter(r => r.report_type?.toUpperCase() === 'DBD').length;
@@ -203,17 +219,13 @@ export default function AdminDashboard() {
 
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-[#0c1f13] via-[#1A3626] to-[#0e261a] flex items-center justify-center font-['Plus_Jakarta_Sans'] p-4 relative overflow-hidden">
-        {/* Decorative elements */}
-        <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-[#EAC775]/5 rounded-full blur-[120px] pointer-events-none"></div>
-        <div className="absolute bottom-[-20%] right-[-10%] w-[600px] h-[600px] bg-[#4ade80]/5 rounded-full blur-[150px] pointer-events-none"></div>
-
-        <div className="bg-white/10 backdrop-blur-xl p-8 rounded-3xl shadow-2xl border border-white/20 max-w-sm w-full text-center relative z-10 animate-in zoom-in duration-500">
-          <div className="w-20 h-20 bg-gradient-to-br from-[#EAC775] to-yellow-600 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg shadow-[#EAC775]/20">
-            <span className="material-symbols-outlined text-white text-4xl">admin_panel_settings</span>
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="bg-white p-10 rounded-2xl shadow-sm border border-gray-100 max-w-sm w-full text-center">
+          <div className="w-16 h-16 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-6">
+            <span className="material-symbols-outlined text-green-700 text-3xl">admin_panel_settings</span>
           </div>
-          <h1 className="font-black text-2xl text-white mb-2 tracking-tight uppercase">Pusat Komando</h1>
-          <p className="text-gray-300 text-sm mb-8 font-medium">Silakan masukkan PIN Rahasia Kemenkes untuk mengakses Dasbor Admin.</p>
+          <h1 className="font-semibold text-xl text-gray-900 mb-2">Pusat Komando</h1>
+          <p className="text-gray-500 text-sm mb-8">Silakan masukkan PIN Rahasia untuk mengakses dasbor.</p>
           
           <form onSubmit={handleLogin}>
             <input 
@@ -221,17 +233,17 @@ export default function AdminDashboard() {
               value={pin}
               onChange={(e) => setPin(e.target.value)}
               placeholder="Masukkan PIN" 
-              className={`w-full px-4 py-4 rounded-xl border-2 ${pinError ? 'border-red-500/50 bg-red-500/10 text-white' : 'border-white/20 bg-black/20 text-white focus:border-[#EAC775]'} focus:outline-none transition-all duration-300 text-center tracking-[0.5em] text-xl mb-4 font-black placeholder:text-gray-500 placeholder:tracking-normal placeholder:font-normal placeholder:text-base`}
+              className={`w-full px-4 py-3 rounded-lg border ${pinError ? 'border-red-300 bg-red-50 text-red-600' : 'border-gray-200 bg-gray-50 text-gray-900 focus:border-green-600'} focus:outline-none transition-colors text-center tracking-[0.3em] text-lg mb-4 placeholder:text-gray-400 placeholder:tracking-normal placeholder:font-normal placeholder:text-sm`}
               autoFocus
             />
-            {pinError && <p className="text-red-400 text-xs mb-4 font-bold bg-red-500/10 py-2 rounded-lg">PIN salah, silakan coba lagi.</p>}
-            <button type="submit" className="w-full bg-[#EAC775] text-[#1A3626] py-4 rounded-xl font-black text-lg hover:bg-yellow-400 transition-all duration-300 shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-95">
-              AKSES DASBOR
+            {pinError && <p className="text-red-500 text-xs mb-4">PIN salah, silakan coba lagi.</p>}
+            <button type="submit" className="w-full bg-[#1A3626] text-white py-3 rounded-lg font-medium hover:bg-[#0c1f13] transition-colors">
+              Akses Dasbor
             </button>
           </form>
           <Link href="/">
-            <p className="mt-8 text-sm text-gray-400 hover:text-white transition-colors cursor-pointer font-medium flex items-center justify-center gap-2">
-              <span className="material-symbols-outlined text-[16px]">arrow_back</span> Kembali ke Web Publik
+            <p className="mt-6 text-sm text-gray-500 hover:text-gray-900 transition-colors cursor-pointer flex items-center justify-center gap-2">
+              Kembali ke Web Publik
             </p>
           </Link>
         </div>
@@ -240,197 +252,218 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F5F7F5] font-['Plus_Jakarta_Sans']">
-      {/* Header - Premium Dark Theme */}
-      <header className="bg-gradient-to-r from-[#0c1f13] via-[#1A3626] to-[#0e261a] p-6 sticky top-0 z-20 shadow-xl border-b border-[#EAC775]/20">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-gradient-to-br from-[#EAC775] to-yellow-600 rounded-xl flex items-center justify-center shadow-lg shadow-[#EAC775]/20">
-              <span className="material-symbols-outlined text-[#1A3626] text-2xl">admin_panel_settings</span>
+    <div className="min-h-screen bg-[#F4F7F4] text-gray-900 font-sans pb-16">
+      {/* Header - Minimalist */}
+      <header className="bg-white sticky top-0 z-20 shadow-sm border-b border-gray-100">
+        <div className="max-w-7xl mx-auto px-6 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-green-50 rounded-lg flex items-center justify-center">
+              <span className="material-symbols-outlined text-[#1A3626] text-xl">admin_panel_settings</span>
             </div>
             <div>
-              <h1 className="font-black text-xl text-white uppercase tracking-wider">Pusat Komando Kemenkes</h1>
-              <p className="text-xs text-[#EAC775] font-semibold tracking-widest uppercase mt-1">Dashboard Pemantauan Risiko & Laporan</p>
+              <h1 className="font-semibold text-lg text-gray-900">Admin Patchmos</h1>
+              <p className="text-xs text-gray-500">Dasbor Data Warga</p>
             </div>
           </div>
           <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
             <button 
               onClick={handleBroadcast}
               disabled={isBroadcasting || totalSubscribers === 0}
-              className={`flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold transition-all shadow-lg border border-transparent ${totalSubscribers === 0 ? 'bg-white/10 text-white/50 cursor-not-allowed border-white/5' : 'bg-red-600 text-white hover:bg-red-500 hover:scale-105 active:scale-95 hover:shadow-red-600/30'}`}
+              className={`flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium transition-colors ${totalSubscribers === 0 ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-red-50 text-red-600 hover:bg-red-100'}`}
             >
               <span className="material-symbols-outlined text-[18px]">
                 {isBroadcasting ? 'hourglass_top' : 'campaign'}
               </span>
-              {isBroadcasting ? 'Mengirim...' : 'Kirim Peringatan Global'}
+              {isBroadcasting ? 'Mengirim...' : 'Kirim Peringatan'}
             </button>
             <Link href="/">
-            <button className="flex items-center gap-2 px-5 py-2.5 bg-white/10 hover:bg-white/20 border border-white/10 transition-colors rounded-xl text-sm font-bold text-white">
-              <span className="material-symbols-outlined text-[18px]">arrow_back</span>
-              Web Publik
-            </button>
-          </Link>
+              <button className="flex items-center gap-2 px-5 py-2.5 bg-white hover:bg-gray-50 border border-gray-200 transition-colors rounded-lg text-sm font-medium text-gray-700 justify-center w-full sm:w-auto">
+                <span className="material-symbols-outlined text-[18px]">arrow_back</span>
+                Web Publik
+              </button>
+            </Link>
           </div>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto p-6 md:p-8">
+      <main className="max-w-7xl mx-auto px-6 mt-8">
         
-        {/* Stats Cards */}
+        {/* Stats Cards - Clean and Soft */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          {/* Card 1 */}
-          <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex items-center gap-5 hover:shadow-md transition-shadow group relative overflow-hidden">
-            <div className="absolute -right-4 -top-4 w-24 h-24 bg-blue-50 rounded-full group-hover:scale-150 transition-transform duration-500 ease-out z-0"></div>
-            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center shadow-lg shadow-blue-200 relative z-10 shrink-0">
-              <span className="material-symbols-outlined text-white text-2xl">receipt_long</span>
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-start gap-4">
+            <div className="w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center shrink-0">
+              <span className="material-symbols-outlined text-blue-600">description</span>
             </div>
-            <div className="relative z-10">
-              <p className="text-xs text-gray-500 font-bold uppercase tracking-wider mb-1">Total Laporan Masuk</p>
-              <h2 className="text-4xl font-black text-[#1A3626]">{loading ? '...' : totalReports}</h2>
+            <div>
+              <p className="text-sm text-gray-500 font-medium mb-1">Total Laporan Masuk</p>
+              <h2 className="text-3xl font-semibold text-gray-900">{loading ? '...' : totalReports}</h2>
             </div>
           </div>
           
-          {/* Card 2 */}
-          <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex items-center gap-5 hover:shadow-md transition-shadow group relative overflow-hidden">
-            <div className="absolute -right-4 -top-4 w-24 h-24 bg-red-50 rounded-full group-hover:scale-150 transition-transform duration-500 ease-out z-0"></div>
-            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-red-400 to-red-600 flex items-center justify-center shadow-lg shadow-red-200 relative z-10 shrink-0">
-              <span className="material-symbols-outlined text-white text-2xl">coronavirus</span>
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-start gap-4">
+            <div className="w-12 h-12 rounded-xl bg-red-50 flex items-center justify-center shrink-0">
+              <span className="material-symbols-outlined text-red-600">health_and_safety</span>
             </div>
-            <div className="relative z-10">
-              <p className="text-xs text-gray-500 font-bold uppercase tracking-wider mb-1">Indikasi Kasus DBD</p>
-              <h2 className="text-4xl font-black text-red-600">{loading ? '...' : dbdCases}</h2>
+            <div>
+              <p className="text-sm text-gray-500 font-medium mb-1">Indikasi Kasus DBD</p>
+              <h2 className="text-3xl font-semibold text-gray-900">{loading ? '...' : dbdCases}</h2>
             </div>
           </div>
 
-          {/* Card 3 */}
-          <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex items-center gap-5 hover:shadow-md transition-shadow group relative overflow-hidden">
-            <div className="absolute -right-4 -top-4 w-24 h-24 bg-[#EAC775]/20 rounded-full group-hover:scale-150 transition-transform duration-500 ease-out z-0"></div>
-            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#EAC775] to-yellow-600 flex items-center justify-center shadow-lg shadow-yellow-200 relative z-10 shrink-0">
-              <span className="material-symbols-outlined text-white text-2xl">pest_control</span>
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-start gap-4">
+            <div className="w-12 h-12 rounded-xl bg-yellow-50 flex items-center justify-center shrink-0">
+              <span className="material-symbols-outlined text-yellow-600">bug_report</span>
             </div>
-            <div className="relative z-10">
-              <p className="text-xs text-gray-500 font-bold uppercase tracking-wider mb-1">Populasi Nyamuk</p>
-              <h2 className="text-4xl font-black text-yellow-600">{loading ? '...' : nyamukCases}</h2>
+            <div>
+              <p className="text-sm text-gray-500 font-medium mb-1">Populasi Nyamuk</p>
+              <h2 className="text-3xl font-semibold text-gray-900">{loading ? '...' : nyamukCases}</h2>
             </div>
           </div>
         </div>
 
-        {/* Data Table */}
-        <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden mb-8">
-          <div className="p-6 md:p-8 border-b border-gray-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white">
-            <div>
-              <h3 className="font-black text-xl text-[#1A3626] uppercase tracking-tight">Data Pelaporan Terbaru</h3>
-              <p className="text-sm text-gray-500 font-medium mt-1">Laporan masuk dari warga secara real-time</p>
-            </div>
-            <ExportButton onClick={() => exportCSV(reports, 'laporan_mosqrisk.csv')} />
-          </div>
-          
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-gray-50/50 text-gray-500 text-xs border-b border-gray-100">
-                  <th className="p-5 font-black uppercase tracking-widest pl-8">Waktu Lapor</th>
-                  <th className="p-5 font-black uppercase tracking-widest">Lokasi</th>
-                  <th className="p-5 font-black uppercase tracking-widest">Tipe</th>
-                  <th className="p-5 font-black uppercase tracking-widest">Deskripsi</th>
-                  <th className="p-5 font-black uppercase tracking-widest text-right pr-8">Aksi</th>
-                </tr>
-              </thead>
-              <tbody className="text-sm">
-                {loading && (
-                  <tr>
-                    <td colSpan={5} className="p-12 text-center text-gray-400 font-medium">Memuat data...</td>
-                  </tr>
-                )}
-                {!loading && reports.length === 0 && (
-                  <tr>
-                    <td colSpan={5} className="p-12 text-center text-gray-400 font-medium flex flex-col items-center justify-center gap-3">
-                      <span className="material-symbols-outlined text-4xl">inbox</span>
-                      Belum ada laporan dari warga.
-                    </td>
-                  </tr>
-                )}
-                {!loading && reports.map((r) => (
-                  <tr key={r.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
-                    <td className="p-5 text-gray-500 whitespace-nowrap pl-8 font-medium">
-                      {new Date(r.created_at).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}
-                    </td>
-                    <td className="p-5 font-bold text-[#1A3626] max-w-[200px] truncate" title={r.location_name}>{r.location_name}</td>
-                    <td className="p-5">
-                      {r.report_type?.toUpperCase() === 'DBD' ? (
-                        <span className="inline-flex items-center gap-1.5 bg-red-50 text-red-700 border border-red-100 px-3 py-1.5 rounded-full text-xs font-black uppercase tracking-wider shadow-sm">
-                          <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span> DBD
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1.5 bg-yellow-50 text-yellow-700 border border-yellow-100 px-3 py-1.5 rounded-full text-xs font-black uppercase tracking-wider shadow-sm">
-                          <span className="w-1.5 h-1.5 rounded-full bg-yellow-500"></span> Nyamuk
-                        </span>
-                      )}
-                    </td>
-                    <td className="p-5 text-gray-500 max-w-xs truncate font-medium" title={r.description}>
-                      {r.description || '-'}
-                    </td>
-                    <td className="p-5 text-right pr-8">
-                      <DeleteButton onClick={() => handleDeleteReport(r.id)} title="Hapus Laporan" />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+        {/* Global Search Bar - Soft */}
+        <div className="mb-8 relative max-w-xl">
+          <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">search</span>
+          <input 
+            type="text" 
+            placeholder="Cari nama daerah, laporan, atau email..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full bg-white border border-gray-200 pl-12 pr-10 py-3 rounded-xl text-gray-900 font-medium placeholder:text-gray-400 placeholder:font-normal focus:outline-none focus:ring-2 focus:ring-green-600/20 focus:border-green-600 transition-all shadow-sm"
+          />
+          {searchQuery && (
+            <button 
+              onClick={() => setSearchQuery('')}
+              className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+            >
+              <span className="material-symbols-outlined text-[18px]">close</span>
+            </button>
+          )}
         </div>
 
-        {/* Subscribers Table */}
-        <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
-          <div className="p-6 md:p-8 border-b border-gray-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white">
-            <div>
-              <h3 className="font-black text-xl text-[#1A3626] uppercase tracking-tight">Database Pelanggan</h3>
-              <p className="text-sm text-gray-500 font-medium mt-1">Total <span className="font-bold text-[#EAC775]">{totalSubscribers} email</span> terdaftar untuk peringatan dini</p>
+        {/* Stacked Tables (Top-Bottom) - Clean layout */}
+        <div className="flex flex-col gap-8">
+          
+          {/* Data Table Laporan */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col">
+            <div className="px-6 py-5 border-b border-gray-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white">
+              <div>
+                <h3 className="font-semibold text-gray-900">Data Laporan Warga</h3>
+                <p className="text-gray-500 text-sm mt-0.5">Daftar laporan yang masuk dari halaman pantauan.</p>
+              </div>
+              <ExportButton onClick={() => exportCSV(reports, 'laporan_patchmos.csv')} />
             </div>
-            <ExportButton onClick={() => exportCSV(subscribers, 'pelanggan_mosqrisk.csv')} />
+            
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-gray-50 text-gray-500 text-xs border-b border-gray-100">
+                    <th className="px-6 py-3 font-medium w-1/4">Lokasi & Waktu</th>
+                    <th className="px-6 py-3 font-medium w-1/6">Tipe Laporan</th>
+                    <th className="px-6 py-3 font-medium w-auto">Deskripsi</th>
+                    <th className="px-6 py-3 font-medium text-right w-24">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody className="text-sm">
+                  {loading && (
+                    <tr>
+                      <td colSpan={4} className="p-12 text-center text-gray-400">Memuat data...</td>
+                    </tr>
+                  )}
+                  {!loading && filteredReports.length === 0 && (
+                    <tr>
+                      <td colSpan={4} className="p-12 text-center text-gray-400">
+                        {searchQuery ? "Tidak ada laporan yang cocok." : "Belum ada laporan dari warga."}
+                      </td>
+                    </tr>
+                  )}
+                  {!loading && filteredReports.map((r) => (
+                    <tr key={r.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
+                      <td className="px-6 py-4 align-top">
+                        <div className="font-medium text-gray-900 mb-1 leading-snug">{r.location_name}</div>
+                        <div className="text-xs text-gray-500">
+                          {new Date(r.created_at).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 align-top">
+                        {r.report_type?.toUpperCase() === 'DBD' ? (
+                          <span className="inline-flex items-center gap-1.5 bg-red-50 text-red-600 px-2.5 py-1 rounded-md text-[11px] font-medium border border-red-100">
+                            <span className="w-1.5 h-1.5 rounded-full bg-red-500"></span> Kasus DBD
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 bg-yellow-50 text-yellow-700 px-2.5 py-1 rounded-md text-[11px] font-medium border border-yellow-100">
+                            <span className="w-1.5 h-1.5 rounded-full bg-yellow-500"></span> Nyamuk
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 align-top text-gray-600 leading-relaxed max-w-md">
+                        {r.description || '-'}
+                      </td>
+                      <td className="px-6 py-4 align-top text-right">
+                        <DeleteButton onClick={() => handleDeleteReport(r.id)} title="Hapus Laporan" />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Subscribers Table */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col">
+            <div className="px-6 py-5 border-b border-gray-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white">
+              <div>
+                <h3 className="font-semibold text-gray-900">Database Pelanggan Email</h3>
+                <p className="text-gray-500 text-sm mt-0.5">Daftar pengguna yang berlangganan peringatan dini.</p>
+              </div>
+              <ExportButton onClick={() => exportCSV(subscribers, 'leads_patchmos.csv')} />
+            </div>
+            
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-gray-50 text-gray-500 text-xs border-b border-gray-100">
+                    <th className="px-6 py-3 font-medium w-1/3">Alamat Email</th>
+                    <th className="px-6 py-3 font-medium w-1/2">Lokasi Pantauan & Waktu Daftar</th>
+                    <th className="px-6 py-3 font-medium text-right w-24">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody className="text-sm">
+                  {loading && (
+                    <tr>
+                      <td colSpan={3} className="p-12 text-center text-gray-400">Memuat data...</td>
+                    </tr>
+                  )}
+                  {!loading && filteredSubscribers.length === 0 && (
+                    <tr>
+                      <td colSpan={3} className="p-12 text-center text-gray-400">
+                        {searchQuery ? "Tidak ada pelanggan yang cocok." : "Belum ada pelanggan notifikasi."}
+                      </td>
+                    </tr>
+                  )}
+                  {!loading && filteredSubscribers.map((s) => (
+                    <tr key={s.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
+                      <td className="px-6 py-4 align-top">
+                        <div className="text-gray-900 font-medium">
+                          {s.email}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 align-top">
+                        <div className="font-medium text-gray-900 mb-1">{s.location_name}</div>
+                        <div className="text-xs text-gray-500">
+                          {new Date(s.created_at).toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short' })}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 align-top text-right">
+                        <DeleteButton onClick={() => handleDeleteSubscriber(s.id)} title="Hapus Pelanggan" />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
           
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-gray-50/50 text-gray-500 text-xs border-b border-gray-100">
-                  <th className="p-5 font-black uppercase tracking-widest pl-8">Waktu Daftar</th>
-                  <th className="p-5 font-black uppercase tracking-widest">Lokasi Pantauan</th>
-                  <th className="p-5 font-black uppercase tracking-widest">Alamat Email</th>
-                  <th className="p-5 font-black uppercase tracking-widest text-right pr-8">Aksi</th>
-                </tr>
-              </thead>
-              <tbody className="text-sm">
-                {loading && (
-                  <tr>
-                    <td colSpan={4} className="p-12 text-center text-gray-400 font-medium">Memuat data...</td>
-                  </tr>
-                )}
-                {!loading && subscribers.length === 0 && (
-                  <tr>
-                    <td colSpan={4} className="p-12 text-center text-gray-400 font-medium">Belum ada pelanggan notifikasi.</td>
-                  </tr>
-                )}
-                {!loading && subscribers.map((s) => (
-                  <tr key={s.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
-                    <td className="p-5 text-gray-500 whitespace-nowrap pl-8 font-medium">
-                      {new Date(s.created_at).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}
-                    </td>
-                    <td className="p-5 font-bold text-[#1A3626]">{s.location_name}</td>
-                    <td className="p-5 font-mono text-gray-600">
-                      <span className="bg-gray-50 border border-gray-200 px-4 py-1.5 rounded-full text-xs font-semibold inline-flex items-center gap-2">
-                        <span className="material-symbols-outlined text-[14px] text-gray-400">mail</span>
-                        {s.email}
-                      </span>
-                    </td>
-                    <td className="p-5 text-right pr-8">
-                      <DeleteButton onClick={() => handleDeleteSubscriber(s.id)} title="Hapus Pelanggan" />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
         </div>
 
       </main>
