@@ -10,7 +10,7 @@ export default function BottomNav() {
     { name: "Beranda", path: "/", icon: "home" },
     { name: "Pantau", path: "/pantau", icon: "radar" },
     { name: "Lapor", path: "/lapor", icon: "add_location" },
-    { name: "Admin", path: "/admin", icon: "admin_panel_settings" },
+    { name: "Edukasi", path: "/edukasi", icon: "menu_book" },
   ];
 
   return (

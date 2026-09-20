@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import Link from 'next/link';
+import Image from 'next/image';
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { toast } from 'react-hot-toast';
@@ -26,24 +27,46 @@ export default function MosqRiskDashboard() {
   const [subscribedLocation, setSubscribedLocation] = useState("");
   const [isPremium, setIsPremium] = useState(false);
   const [impactKg, setImpactKg] = useState(2.5);
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<Record<string, unknown> | null>(null);
+
+  // State untuk Dropdown Lokasi Emsifa (Moved up to fix variable hoisting)
+  const [provinces, setProvinces] = useState<Array<Record<string, unknown>>>([]);
+  const [regencies, setRegencies] = useState<Array<Record<string, unknown>>>([]);
+  const [selectedProv, setSelectedProv] = useState("");
+  const [selectedReg, setSelectedReg] = useState("");
+  const [locationName, setLocationName] = useState("");
+
+  // State untuk Data Dinamis
+  const [mosqRiskData, setMosqRiskData] = useState<Record<string, unknown> | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
 
   useEffect(() => {
-    setIsMounted(true);
-    if (typeof window !== 'undefined') {
-      const checkUser = async () => {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user) {
-          setUser(session.user);
-          setWaNumber(session.user.email || '');
-          setIsEmailRegistered(true);
-          setSubscribedEmail(session.user.email || '');
-          localStorage.setItem('emailRegistered', 'true');
-          localStorage.setItem('subscribedEmail', session.user.email || '');
-        }
-      };
-      checkUser();
+    setTimeout(() => setIsMounted(true), 0);
+    
+    const checkUser = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        setUser(session.user as Record<string, unknown>);
+        setWaNumber(session.user.email || '');
+        setIsEmailRegistered(true);
+        setSubscribedEmail(session.user.email || '');
+        localStorage.setItem('emailRegistered', 'true');
+        localStorage.setItem('subscribedEmail', session.user.email || '');
+      }
+    };
+    checkUser();
 
+    const { data } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session?.user) {
+        setUser(session.user as Record<string, unknown>);
+        setWaNumber(session.user.email || '');
+      } else {
+        setUser(null);
+      }
+    });
+
+    if (typeof window !== 'undefined') {
       const premium = localStorage.getItem('isPremium') === 'true';
       setIsPremium(premium);
 
@@ -96,7 +119,7 @@ export default function MosqRiskDashboard() {
       } else {
         setWaError(data.message);
       }
-    } catch(e) {
+    } catch {
       setWaError("Terjadi kesalahan koneksi.");
     } finally {
       setWaSubmitting(false);
@@ -111,22 +134,11 @@ export default function MosqRiskDashboard() {
           redirectTo: `${window.location.origin}/pantau`
         }
       });
-    } catch (error) {
+    } catch {
       toast.error("Gagal memulai login Google");
     }
   };
 
-  // State untuk Data Dinamis
-  const [mosqRiskData, setMosqRiskData] = useState<any>(null);
-  const [loading, setLoading] = useState(false);
-  const [errorMsg, setErrorMsg] = useState("");
-
-  // State untuk Dropdown Lokasi Emsifa
-  const [provinces, setProvinces] = useState([]);
-  const [regencies, setRegencies] = useState([]);
-  const [selectedProv, setSelectedProv] = useState("");
-  const [selectedReg, setSelectedReg] = useState("");
-  const [locationName, setLocationName] = useState("");
 
   // Fetch daftar provinsi saat komponen dimuat
   useEffect(() => {
@@ -144,14 +156,17 @@ export default function MosqRiskDashboard() {
       sessionStorage.setItem('gpsPrompted', 'true'); // Hanya prompt sekali per sesi
       handleGPSLocation();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [provinces]);
 
   // Fetch daftar kabupaten/kota ketika provinsi dipilih
   useEffect(() => {
     if (!selectedProv) {
-      setRegencies([]);
-      setSelectedReg("");
-      return;
+      const t = setTimeout(() => {
+        setRegencies([]);
+        setSelectedReg("");
+      }, 0);
+      return () => clearTimeout(t);
     }
     fetch(`https://www.emsifa.com/api-wilayah-indonesia/api/regencies/${selectedProv}.json`)
       .then(res => res.json())
@@ -160,7 +175,7 @@ export default function MosqRiskDashboard() {
         // GPS Auto-select logic
         if (pendingGPSCity) {
           const cleanPending = pendingGPSCity.replace("KOTA ", "").replace("KABUPATEN ", "").replace(/\s+/g, "");
-          const matchedReg = data.find((r: any) => {
+          const matchedReg = data.find((r: Record<string, unknown>) => {
             const cleanRegName = r.name.replace("KOTA ", "").replace("KABUPATEN ", "").replace(/\s+/g, "");
             return cleanRegName.includes(cleanPending) || cleanPending.includes(cleanRegName);
           });
@@ -179,9 +194,10 @@ export default function MosqRiskDashboard() {
         console.error("Gagal memuat kabupaten:", err);
         setLoading(false);
       });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedProv]);
 
-  const handleGPSLocation = () => {
+  function handleGPSLocation() {
     if (!navigator.geolocation) {
       toast.error("Browser Anda tidak mendukung fitur GPS.");
       return;
@@ -200,15 +216,15 @@ export default function MosqRiskDashboard() {
           if (!state || !city) throw new Error("Data lokasi GPS tidak lengkap.");
           
           // Cari provinsi
-          const matchedProv = provinces.find((p: any) => p.name.includes(state) || state.includes(p.name));
+          const matchedProv = provinces.find((p: Record<string, unknown>) => p.name.includes(state) || state.includes(p.name));
           if (matchedProv) {
             setPendingGPSCity(city);
-            setSelectedProv((matchedProv as any).id);
+            setSelectedProv((matchedProv as Record<string, unknown>).id);
           } else {
             throw new Error(`Provinsi ${state} tidak ditemukan.`);
           }
         }
-      } catch (err: any) {
+      } catch (err: Record<string, unknown>) {
         toast.error("Gagal melacak lokasi: " + err.message);
         setLoading(false);
       }
@@ -222,8 +238,10 @@ export default function MosqRiskDashboard() {
   useEffect(() => {
     if (!selectedReg) return;
     
-    const regObj: any = regencies.find((r: any) => r.id === selectedReg);
-    if (regObj) setLocationName(regObj.name);
+    const regObj: Record<string, unknown> = regencies.find((r: Record<string, unknown>) => r.id === selectedReg);
+    if (regObj) {
+      setTimeout(() => setLocationName(regObj.name as string), 0);
+    }
 
     const fetchMosqRisk = async () => {
       setLoading(true);
@@ -273,7 +291,7 @@ export default function MosqRiskDashboard() {
             setErrorMsg(backendData.error || "Gagal mengambil data cuaca dari backend.");
             setMosqRiskData(null);
         }
-      } catch (err: any) {
+      } catch (err: Record<string, unknown>) {
         console.error(err);
         setErrorMsg(err.message || "Terjadi kesalahan saat memproses lokasi.");
         setMosqRiskData(null);
@@ -320,7 +338,7 @@ export default function MosqRiskDashboard() {
               <div>
                 <p className="font-label-sm text-xs md:text-sm text-on-surface-variant">Lokasi Pemantauan {isPremium && <span className="ml-2 bg-[#EAC775] text-[#1A3626] px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-sm">Premium</span>}</p>
                 <p className="font-headline-md text-sm md:text-base text-primary font-bold">
-                  {locationName ? `${locationName}${provinces.find((p:any) => p.id === selectedProv) ? `, ${(provinces.find((p:any) => p.id === selectedProv) as any).name}` : ''}` : "Ketuk untuk memilih lokasi..."}
+                  {locationName ? `${locationName}${provinces.find((p:Record<string, unknown>) => p.id === selectedProv) ? `, ${(provinces.find((p:Record<string, unknown>) => p.id === selectedProv) as Record<string, unknown>).name}` : ''}` : "Ketuk untuk memilih lokasi..."}
                 </p>
               </div>
             </div>
@@ -411,10 +429,12 @@ export default function MosqRiskDashboard() {
 
             {/* Background Spray Silhouette */}
             <div className="absolute right-[-10%] bottom-[-15%] opacity-40 w-48 h-48 md:w-64 md:h-64 pointer-events-none z-0 transition-transform duration-500 group-hover:scale-110 mix-blend-screen">
-              <img 
-                className="w-full h-full object-contain filter drop-shadow-[0_0_15px_rgba(234,199,117,0.3)]" 
-                alt="Botol Patchmos" 
+              <Image 
                 src="/spray-square-white.png"
+                alt="Botol Patchmos" 
+                width={300}
+                height={300}
+                className="w-full h-full object-contain filter drop-shadow-[0_0_15px_rgba(234,199,117,0.3)]" 
               />
             </div>
 
@@ -545,7 +565,7 @@ export default function MosqRiskDashboard() {
                     <Tooltip 
                       contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', backgroundColor: isPremium ? '#F4F6F5' : 'white' }}
                       itemStyle={{ color: isPremium ? '#1A3626' : '#BA1A1A', fontWeight: 'bold' }}
-                      formatter={(value: any) => [`${value} / 100`, 'Skor Risiko']}
+                      formatter={(value: Record<string, unknown>) => [`${value} / 100`, 'Skor Risiko']}
                     />
                     <Area type="monotone" dataKey="risk_score" stroke={isPremium ? "#EAC775" : "#BA1A1A"} strokeWidth={3} fillOpacity={1} fill="url(#colorRisk)" />
                   </AreaChart>
@@ -642,7 +662,7 @@ export default function MosqRiskDashboard() {
                   onChange={(e) => { setSelectedProv(e.target.value); setSelectedReg(""); }}
                 >
                   <option value="">-- Pilih Provinsi --</option>
-                  {provinces.map((p: any) => (
+                  {provinces.map((p: Record<string, unknown>) => (
                     <option key={p.id} value={p.id}>{p.name}</option>
                   ))}
                 </select>
@@ -657,7 +677,7 @@ export default function MosqRiskDashboard() {
                   disabled={selectedProv === ""}
                 >
                   <option value="">-- Pilih Kota/Kabupaten --</option>
-                  {regencies.map((r: any) => (
+                  {regencies.map((r: Record<string, unknown>) => (
                     <option key={r.id} value={r.id}>{r.name}</option>
                   ))}
                 </select>
@@ -743,7 +763,7 @@ export default function MosqRiskDashboard() {
                       onClick={handleGoogleLogin}
                       className="w-full bg-white border border-gray-300 text-gray-700 font-bold py-3 rounded-lg hover:bg-gray-50 transition-colors flex items-center justify-center gap-3 shadow-sm"
                     >
-                      <img src="https://www.svgrepo.com/show/475656/google-color.svg" alt="Google" className="w-5 h-5" />
+                      <Image unoptimized src="https://www.svgrepo.com/show/475656/google-color.svg" alt="Google" width={20} height={20} className="w-5 h-5" />
                       Login dengan Google
                     </button>
                   )}

@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import Image from 'next/image';
 
 export default function Footer() {
   return (
@@ -10,7 +11,14 @@ export default function Footer() {
         {/* Brand Section */}
         <div className="md:col-span-5 flex flex-col items-start text-left">
           <div className="flex items-center gap-3 mb-6">
-            <span className="material-symbols-outlined text-[#EAC775] text-4xl drop-shadow-md" style={{ fontVariationSettings: "'FILL' 1" }}>water_drop</span>
+            <Image 
+              src="/logonavbar.png" 
+              alt="MosqRisk Logo" 
+              width={1500}
+              height={1500}
+              quality={100}
+              className="h-10 w-auto object-contain drop-shadow-[0_0_10px_rgba(234,199,117,0.3)]" 
+            />
             <h3 className="font-extrabold text-3xl tracking-tight">Mosq<span className="text-[#EAC775]">Risk</span></h3>
           </div>
           <p className="text-white/70 text-[15px] leading-relaxed max-w-sm mb-6">
@@ -33,6 +41,7 @@ export default function Footer() {
             <li><Link href="/" className="hover:text-[#EAC775] hover:translate-x-1 transition-all duration-300 inline-block">Beranda</Link></li>
             <li><Link href="/pantau" className="hover:text-[#EAC775] hover:translate-x-1 transition-all duration-300 inline-block">Dasbor Pantauan AI</Link></li>
             <li><Link href="/lapor" className="hover:text-[#EAC775] hover:translate-x-1 transition-all duration-300 inline-block">Lapor Genangan Warga</Link></li>
+            <li><Link href="/edukasi" className="hover:text-[#EAC775] hover:translate-x-1 transition-all duration-300 inline-block">Pusat Edukasi</Link></li>
             <li><Link href="/checkout" className="hover:text-[#EAC775] hover:translate-x-1 transition-all duration-300 inline-block font-semibold">Beli Patchmos Spray</Link></li>
           </ul>
         </div>

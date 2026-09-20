@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import ClaimModal from "@/components/ClaimModal";
@@ -13,8 +14,9 @@ export default function LandingPage() {
   const [isMounted, setIsMounted] = useState(false);
 
   React.useEffect(() => {
-    setIsMounted(true);
-    setIsPremium(localStorage.getItem('isPremium') === 'true');
+    const t = setTimeout(() => setIsMounted(true), 0);
+    setTimeout(() => setIsPremium(localStorage.getItem('isPremium') === 'true'), 0);
+    return () => clearTimeout(t);
   }, []);
 
   return (
@@ -29,10 +31,10 @@ export default function LandingPage() {
 
         {/* Decorative Assets to fill empty sides */}
         <div className={`absolute top-[35%] right-[2%] hidden xl:block pointer-events-none motion-float-slow transition-all duration-1000 delay-300 ease-out transform ${isMounted ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-12'}`}>
-          <img src="/spray-square.png" alt="" className="w-[350px] h-[350px] object-contain drop-shadow-2xl transform rotate-12" />
+          <Image src="/spray-square.png" alt="Produk Patchmos" width={350} height={350} priority className="w-[350px] h-[350px] object-contain drop-shadow-2xl transform rotate-12" />
         </div>
         <div className={`absolute bottom-[20%] left-[3%] hidden xl:block pointer-events-none blur-[1px] motion-float-normal transition-all duration-1000 delay-500 ease-out transform ${isMounted ? 'opacity-40 -translate-x-0' : 'opacity-0 -translate-x-12'}`}>
-          <img src="/spray-square.png" alt="" className="w-[200px] h-[200px] object-contain drop-shadow-xl transform -rotate-12" />
+          <Image src="/spray-square.png" alt="" width={200} height={200} className="w-[200px] h-[200px] object-contain drop-shadow-xl transform -rotate-12" />
         </div>
         
         {/* Floating Icons */}
@@ -47,10 +49,6 @@ export default function LandingPage() {
         </div>
 
         <div className={`max-w-7xl mx-auto px-4 relative z-10 flex flex-col items-center text-center transition-all duration-1000 ease-out transform ${isMounted ? 'opacity-100 blur-0 translate-y-0 scale-100' : 'opacity-0 blur-md translate-y-8 scale-95'}`}>
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 text-primary font-bold text-sm mb-8 animate-in slide-in-from-bottom-4 fade-in duration-500">
-            <span className="material-symbols-outlined text-[18px]">verified</span>
-            Resmi Terhubung AI MosqRisk BMKG
-          </div>
           <h1 className="text-4xl md:text-6xl lg:text-7xl font-extrabold text-[#1A3626] mb-6 leading-tight max-w-5xl tracking-tight animate-in slide-in-from-bottom-6 fade-in duration-700 delay-100">
             Inovasi Hijau dari Serambi Mekkah untuk <span className="text-[#EAC775] drop-shadow-sm">Keluarga Bebas Nyamuk</span>
           </h1>
@@ -175,59 +173,45 @@ export default function LandingPage() {
         <RevealOnScroll className="max-w-7xl mx-auto px-4 text-center">
           <h2 className="text-3xl md:text-4xl font-bold text-primary mb-12">Apa Kata Mereka?</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            <div className="bg-white p-8 rounded-3xl shadow-md border border-gray-100 text-left relative">
-              <div className="flex text-[#FFD700] mb-4">
-                <span className="material-symbols-outlined" style={{fontVariationSettings: "'FILL' 1" }}>star</span>
-                <span className="material-symbols-outlined" style={{fontVariationSettings: "'FILL' 1" }}>star</span>
-                <span className="material-symbols-outlined" style={{fontVariationSettings: "'FILL' 1" }}>star</span>
-                <span className="material-symbols-outlined" style={{fontVariationSettings: "'FILL' 1" }}>star</span>
-                <span className="material-symbols-outlined" style={{fontVariationSettings: "'FILL' 1" }}>star</span>
-              </div>
-              <p className="text-on-surface-variant italic mb-6">"Wanginya sangat menenangkan, tidak menyengat seperti obat nyamuk biasa. Anak saya yang biasanya alergi merah-merah kalau pakai lotion nyamuk kimia, sekarang aman pakai Patchmos."</p>
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-gray-200 rounded-full flex items-center justify-center font-bold text-gray-500">SI</div>
-                <div>
-                  <h4 className="font-bold text-on-surface">Siti Rahma</h4>
-                  <p className="text-xs text-on-surface-variant">Ibu Rumah Tangga, Banda Aceh</p>
+            {[
+              {
+                text: "Wanginya sangat menenangkan, tidak menyengat seperti obat nyamuk biasa. Anak saya yang biasanya alergi merah-merah kalau pakai lotion nyamuk kimia, sekarang aman pakai Patchmos.",
+                initials: "SI",
+                name: "Siti Rahma",
+                role: "Ibu Rumah Tangga, Banda Aceh",
+                hiddenClass: ""
+              },
+              {
+                text: "Konsepnya luar biasa. Membeli produk ini sama dengan mendukung petani lokal kita. Plus fitur notifikasi cuacanya bikin kita lebih aware kalau musim hujan dan banyak genangan air.",
+                initials: "BU",
+                name: "Budi Santoso",
+                role: "Pekerja Lapangan, Jakarta",
+                hiddenClass: ""
+              },
+              {
+                text: "Saya suka karena teksturnya tidak lengket sama sekali. Cepat meresap dan aroma khas nilamnya bikin rileks saat dipakai sebelum tidur malam.",
+                initials: "AN",
+                name: "Anita Dewi",
+                role: "Mahasiswi, Bandung",
+                hiddenClass: "hidden lg:block"
+              }
+            ].map((testimonial, i) => (
+              <div key={i} className={`bg-white p-8 rounded-3xl shadow-md border border-gray-100 text-left relative ${testimonial.hiddenClass}`}>
+                <div className="flex text-[#FFD700] mb-4">
+                  {[...Array(5)].map((_, idx) => (
+                    <span key={idx} className="material-symbols-outlined" style={{fontVariationSettings: "'FILL' 1" }}>star</span>
+                  ))}
+                </div>
+                <p className="text-on-surface-variant italic mb-6">&quot;{testimonial.text}&quot;</p>
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-gray-200 rounded-full flex items-center justify-center font-bold text-gray-500">{testimonial.initials}</div>
+                  <div>
+                    <h4 className="font-bold text-on-surface">{testimonial.name}</h4>
+                    <p className="text-xs text-on-surface-variant">{testimonial.role}</p>
+                  </div>
                 </div>
               </div>
-            </div>
-            
-            <div className="bg-white p-8 rounded-3xl shadow-md border border-gray-100 text-left relative">
-              <div className="flex text-[#FFD700] mb-4">
-                <span className="material-symbols-outlined" style={{fontVariationSettings: "'FILL' 1" }}>star</span>
-                <span className="material-symbols-outlined" style={{fontVariationSettings: "'FILL' 1" }}>star</span>
-                <span className="material-symbols-outlined" style={{fontVariationSettings: "'FILL' 1" }}>star</span>
-                <span className="material-symbols-outlined" style={{fontVariationSettings: "'FILL' 1" }}>star</span>
-                <span className="material-symbols-outlined" style={{fontVariationSettings: "'FILL' 1" }}>star</span>
-              </div>
-              <p className="text-on-surface-variant italic mb-6">"Konsepnya luar biasa. Membeli produk ini sama dengan mendukung petani lokal kita. Plus fitur notifikasi cuacanya bikin kita lebih aware kalau musim hujan dan banyak genangan air."</p>
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-gray-200 rounded-full flex items-center justify-center font-bold text-gray-500">BU</div>
-                <div>
-                  <h4 className="font-bold text-on-surface">Budi Santoso</h4>
-                  <p className="text-xs text-on-surface-variant">Pekerja Lapangan, Jakarta</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white p-8 rounded-3xl shadow-md border border-gray-100 text-left relative hidden lg:block">
-              <div className="flex text-[#FFD700] mb-4">
-                <span className="material-symbols-outlined" style={{fontVariationSettings: "'FILL' 1" }}>star</span>
-                <span className="material-symbols-outlined" style={{fontVariationSettings: "'FILL' 1" }}>star</span>
-                <span className="material-symbols-outlined" style={{fontVariationSettings: "'FILL' 1" }}>star</span>
-                <span className="material-symbols-outlined" style={{fontVariationSettings: "'FILL' 1" }}>star</span>
-                <span className="material-symbols-outlined" style={{fontVariationSettings: "'FILL' 1" }}>star</span>
-              </div>
-              <p className="text-on-surface-variant italic mb-6">"Saya suka karena teksturnya tidak lengket sama sekali. Cepat meresap dan aroma khas nilamnya bikin rileks saat dipakai sebelum tidur malam."</p>
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-gray-200 rounded-full flex items-center justify-center font-bold text-gray-500">AN</div>
-                <div>
-                  <h4 className="font-bold text-on-surface">Anita Dewi</h4>
-                  <p className="text-xs text-on-surface-variant">Mahasiswi, Bandung</p>
-                </div>
-              </div>
-            </div>
+            ))}
           </div>
         </RevealOnScroll>
       </section>

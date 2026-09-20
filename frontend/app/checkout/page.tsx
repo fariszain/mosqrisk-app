@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import Link from "next/link";
+import Image from "next/image";
 import { toast } from 'react-hot-toast';
 
 import Navbar from "@/components/Navbar";
@@ -12,16 +12,15 @@ export default function CheckoutPage() {
   const [paymentMethod, setPaymentMethod] = useState("QRIS");
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
   const [isQrisModalOpen, setIsQrisModalOpen] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false);
   const [address, setAddress] = useState("KOTA BANDA ACEH, ACEH");
   const [isLoadingAddress, setIsLoadingAddress] = useState(false);
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
 
   useEffect(() => {
-    setIsMounted(true);
+    const t = setTimeout(() => setIsMounted(true), 0);
     if ("geolocation" in navigator) {
-      setIsLoadingAddress(true);
+    setTimeout(() => setIsLoadingAddress(true), 0);
       navigator.geolocation.getCurrentPosition(
         async (position) => {
           try {
@@ -41,6 +40,7 @@ export default function CheckoutPage() {
         }
       );
     }
+    return () => clearTimeout(t);
   }, []);
 
   const pricePerBottle = 35000;
@@ -50,9 +50,7 @@ export default function CheckoutPage() {
   if (quantity === 3) totalPrice = 90000;
 
   const handlePaymentVerification = () => {
-    setIsProcessing(true);
     setTimeout(() => {
-      setIsProcessing(false);
       setIsQrisModalOpen(false);
       setIsSuccessModalOpen(true);
       if (typeof window !== 'undefined') {
@@ -79,16 +77,17 @@ export default function CheckoutPage() {
       toast.dismiss(toastId);
       
       if (data.success && data.token) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (window as any).snap.pay(data.token, {
-          onSuccess: function(result: any) {
+          onSuccess: function() {
             localStorage.setItem("isPremium", "true");
             setIsQrisModalOpen(false);
             setIsSuccessModalOpen(true);
           },
-          onPending: function(result: any) {
+          onPending: function() {
             toast.success("Menunggu pembayaran...");
           },
-          onError: function(result: any) {
+          onError: function() {
             toast.error("Pembayaran gagal!");
           },
           onClose: function() {
@@ -98,7 +97,7 @@ export default function CheckoutPage() {
       } else {
         toast.error("Gagal memproses pembayaran: " + (data.message || "Unknown error"));
       }
-    } catch(err) {
+    } catch {
       toast.error("Error menghubungi server");
     }
   };
@@ -141,10 +140,12 @@ export default function CheckoutPage() {
 
         {/* Decorative Spray Silhouette (Bigger, Better Positioned) */}
         <div className="absolute right-[-10%] md:right-[0%] bottom-[-15%] opacity-40 w-[350px] h-[350px] md:w-[600px] md:h-[600px] pointer-events-none mix-blend-overlay transition-transform duration-1000 hover:scale-105">
-           <img 
-              className="w-full h-full object-contain filter drop-shadow-2xl" 
-              alt="Spray Silhouette" 
+           <Image 
               src="/spray-square-white.png"
+              alt="Spray Silhouette" 
+              width={600}
+              height={600}
+              className="w-full h-full object-contain filter drop-shadow-2xl" 
             />
         </div>
 
@@ -269,7 +270,7 @@ export default function CheckoutPage() {
                   {/* Background Bottle Image Container */}
                   <div className="absolute inset-0 overflow-hidden rounded-[14px] pointer-events-none">
                     <div className={`absolute right-[-20%] bottom-[-25%] w-32 h-32 pointer-events-none transition-all duration-500 ease-in-out mix-blend-screen ${quantity === 1 ? 'opacity-20 scale-100 translate-x-0' : 'opacity-0 scale-90 translate-x-4'}`}>
-                      <img src="/spray-square-white.png" alt="" className="w-full h-full object-contain filter drop-shadow-md" />
+                      <Image src="/spray-square-white.png" alt="" width={150} height={150} className="w-full h-full object-contain filter drop-shadow-md" />
                     </div>
                   </div>
 
@@ -290,7 +291,7 @@ export default function CheckoutPage() {
                   {/* Background Bottle Image Container */}
                   <div className="absolute inset-0 overflow-hidden rounded-[14px] pointer-events-none">
                     <div className={`absolute right-[-20%] bottom-[-25%] w-32 h-32 pointer-events-none transition-all duration-500 ease-in-out mix-blend-screen ${quantity === 2 ? 'opacity-20 scale-100 translate-x-0' : 'opacity-0 scale-90 translate-x-4'}`}>
-                      <img src="/spray-square-white.png" alt="" className="w-full h-full object-contain filter drop-shadow-md" />
+                      <Image src="/spray-square-white.png" alt="" width={150} height={150} className="w-full h-full object-contain filter drop-shadow-md" />
                     </div>
                   </div>
 
@@ -313,7 +314,7 @@ export default function CheckoutPage() {
                   {/* Background Bottle Image Container */}
                   <div className="absolute inset-0 overflow-hidden rounded-[14px] pointer-events-none">
                     <div className={`absolute right-[-20%] bottom-[-25%] w-32 h-32 pointer-events-none transition-all duration-500 ease-in-out mix-blend-screen ${quantity === 3 ? 'opacity-20 scale-100 translate-x-0' : 'opacity-0 scale-90 translate-x-4'}`}>
-                      <img src="/spray-square-white.png" alt="" className="w-full h-full object-contain filter drop-shadow-md" />
+                      <Image src="/spray-square-white.png" alt="" width={150} height={150} className="w-full h-full object-contain filter drop-shadow-md" />
                     </div>
                   </div>
 
@@ -406,10 +407,12 @@ export default function CheckoutPage() {
               <div className={`${darkGreen} rounded-[2.5rem] p-6 md:p-8 shadow-xl relative overflow-hidden text-white border border-[#2c523d]`}>
                 {/* Decorative background spray silhouette from Image 2 */}
                 <div className="absolute right-[-20%] bottom-[-20%] opacity-20 w-64 h-64 pointer-events-none mix-blend-screen">
-                   <img 
-                      className="w-full h-full object-contain" 
-                      alt="Spray Silhouette" 
+                   <Image 
                       src="/spray-square-white.png"
+                      alt="Spray Silhouette" 
+                      width={300}
+                      height={300}
+                      className="w-full h-full object-contain" 
                     />
                 </div>
                 
@@ -466,7 +469,7 @@ export default function CheckoutPage() {
             </p>
             
             <div className="bg-gray-50 rounded-[2rem] p-4 mb-6 border-2 border-dashed border-gray-200 flex justify-center">
-              <img src="/qris-payment.png" alt="QRIS MosqRisk" className="w-full max-w-[280px] rounded-xl shadow-sm" />
+              <Image src="/qris-payment.png" alt="QRIS MosqRisk" width={300} height={300} className="w-full max-w-[280px] rounded-xl shadow-sm" />
             </div>
             
             <div className="flex flex-col gap-3">

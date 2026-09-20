@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { supabase } from "@/lib/supabase";
 import { toast } from "react-hot-toast";
 
@@ -87,12 +88,6 @@ export default function SlidingAuthCard({
     }
   };
 
-  // Tema Warna Terinspirasi dari Website
-  const primaryGreen = "bg-[#1A3626]";
-  const textPrimaryGreen = "text-[#1A3626]";
-  const accentGold = "bg-[#EAC775]";
-  const textAccentGold = "text-[#EAC775]";
-
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-md p-4 animate-in fade-in duration-300" onClick={onClose}>
       <div 
@@ -104,9 +99,7 @@ export default function SlidingAuthCard({
         </button>
 
         <div className="flex items-center justify-center gap-2 mb-6">
-          <span className="material-symbols-outlined text-3xl text-[#1A3626]" style={{fontVariationSettings: "'FILL' 1" }}>
-            water_drop
-          </span>
+          <Image src="/logonavbar.png" alt="MosqRisk Logo" width={32} height={32} className="h-8 w-auto object-contain" />
           <span className="text-xl font-black text-[#1A3626] tracking-widest uppercase">MosqRisk</span>
         </div>
 
@@ -156,9 +149,13 @@ export default function SlidingAuthCard({
           <div className="relative bg-white px-4 text-xs font-bold text-gray-400 uppercase">Atau dengan</div>
         </div>
 
-        <button onClick={handleGoogleAuth} disabled={isGoogleLoading} className="mt-6 w-full bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 font-bold py-3 rounded-xl transition-all flex justify-center items-center gap-3">
-          <img src="https://www.svgrepo.com/show/475656/google-color.svg" alt="Google" className="w-5 h-5" />
-          Google
+        <button onClick={handleGoogleAuth} disabled={isGoogleLoading} className="mt-6 w-full flex items-center justify-center gap-3 py-3 px-4 bg-white border-2 border-gray-100 text-gray-700 font-bold rounded-xl shadow-sm hover:bg-gray-50 hover:border-gray-200 transition-all duration-300 disabled:opacity-70 disabled:cursor-not-allowed">
+          {isGoogleLoading ? (
+            <div className="w-5 h-5 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
+          ) : (
+            <Image src="https://www.svgrepo.com/show/475656/google-color.svg" alt="Google" width={20} height={20} className="w-5 h-5" />
+          )}
+          Lanjutkan dengan Google
         </button>
         
         <div className="mt-6 text-center">

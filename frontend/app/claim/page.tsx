@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import Navbar from "@/components/Navbar";
 
 export default function ClaimPage() {
@@ -14,7 +13,10 @@ export default function ClaimPage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const urlCode = params.get('code');
-    if (urlCode) setCode(urlCode.toUpperCase());
+    if (urlCode) {
+      const t = setTimeout(() => setCode(urlCode.toUpperCase()), 0);
+      return () => clearTimeout(t);
+    }
   }, []);
 
   const handleClaim = async (e: React.FormEvent) => {
@@ -43,7 +45,7 @@ export default function ClaimPage() {
         setStatus("error");
         setErrorMessage(data.message);
       }
-    } catch (err) {
+    } catch {
       setStatus("error");
       setErrorMessage("Gagal terhubung ke server.");
     }

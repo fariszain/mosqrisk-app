@@ -3,7 +3,7 @@ try:
     from PIL import Image
     import math
 
-    img = Image.open('frontend/public/Spray.png').convert('RGBA')
+    img = Image.open('frontend/public/logonavbar.png').convert('RGBA')
     pixels = img.load()
     width, height = img.size
     
@@ -25,7 +25,7 @@ try:
                 alpha = int(((dist - 20) / 20.0) * 255)
                 pixels[x, y] = (r, g, b, alpha)
                 
-    img.save('frontend/public/Spray.png')
+    img.save('frontend/public/logonavbar.png')
     print("Successfully processed Spray.png")
 except Exception as e:
     print(f"Error: {e}")

@@ -219,6 +219,77 @@ async def get_mosqrisk_data(adm4: str = Query(..., description="Kode ADM4 BPS (c
             "error": f"Data cuaca tidak tersedia. {err_msg}"
         }
 
+@app.get("/api/climate-trend")
+async def get_climate_trend(lat: float = Query(...), lon: float = Query(...)):
+    """Endpoint untuk mendapatkan tren iklim 12 bulan terakhir dari Open-Meteo"""
+    try:
+        # Tentukan rentang 1 tahun terakhir (Tahun lalu agar kalender lengkap)
+        last_year = datetime.now().year - 1
+        start_date = f"{last_year}-01-01"
+        end_date = f"{last_year}-12-31"
+        
+        # URL Open-Meteo Archive API
+        url = f"https://archive-api.open-meteo.com/v1/archive?latitude={lat}&longitude={lon}&start_date={start_date}&end_date={end_date}&daily=temperature_2m_mean,precipitation_sum&timezone=Asia%2FJakarta"
+        
+        headers = {'User-Agent': 'MosqRisk-Engine/1.0'}
+        response = requests.get(url, headers=headers, timeout=30)
+        if response.status_code != 200:
+            return {"success": False, "error": f"Open-Meteo API Error: {response.status_code}"}
+            
+        data = response.json()
+        daily = data.get("daily", {})
+        times = daily.get("time", [])
+        temps = daily.get("temperature_2m_mean", [])
+        precips = daily.get("precipitation_sum", [])
+        
+        if not times:
+            return {"success": False, "error": "No daily data returned from Open-Meteo"}
+            
+        # Agregasi ke bulanan
+        monthly_data = {}
+        for i, date_str in enumerate(times):
+            month_idx = int(date_str.split("-")[1])
+            if month_idx not in monthly_data:
+                monthly_data[month_idx] = {"temps": [], "precips": []}
+                
+            if i < len(temps) and temps[i] is not None:
+                monthly_data[month_idx]["temps"].append(temps[i])
+            if i < len(precips) and precips[i] is not None:
+                monthly_data[month_idx]["precips"].append(precips[i])
+                
+        # Hitung rata-rata dan skor untuk setiap bulan
+        months_indo = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Ags", "Sep", "Okt", "Nov", "Des"]
+        
+        trend = []
+        for m in range(1, 13):
+            m_data = monthly_data.get(m, {"temps": [], "precips": []})
+            
+            avg_temp = sum(m_data["temps"]) / len(m_data["temps"]) if m_data["temps"] else 28.0
+            sum_precip = sum(m_data["precips"]) if m_data["precips"] else 0.0
+            
+            # Buat perhitungan risiko dinamis khusus tren historis agar grafik tidak datar 100
+            # Karena rata-rata bulanan meratakan hari-hari ekstrem, kita buat proksi risiko:
+            rain_factor = min(sum_precip / 250.0, 1.0) * 55  # Max 55 poin dari hujan
+            temp_factor = 45 if 26 <= avg_temp <= 29 else 25 # Max 45 poin dari suhu ideal
+            
+            score = int(rain_factor + temp_factor)
+            score = min(max(score, 15), 100) # Pastikan di antara 15-100
+            
+            trend.append({
+                "name": months_indo[m-1],
+                "hujan": round(sum_precip, 1), # Untuk grafik, kita tampilkan total hujannya
+                "suhu": round(avg_temp, 1),
+                "risiko": score
+            })
+            
+        return {
+            "success": True,
+            "data": trend
+        }
+    except Exception as e:
+        print(f"Error Open-Meteo: {e}")
+        return {"success": False, "error": str(e)}
+
 # --- LOCAL BROADCAST LOGIC ---
 def send_local_broadcast(report: Report):
     try:

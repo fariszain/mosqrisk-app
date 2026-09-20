@@ -4,6 +4,7 @@ import { useState, useRef } from "react";
 import { Scanner } from "@yudiel/react-qr-scanner";
 import { useRouter } from "next/navigation";
 import jsQR from "jsqr";
+import Image from "next/image";
 
 interface ClaimModalProps {
   isOpen: boolean;
@@ -69,7 +70,7 @@ export default function ClaimModal({ isOpen, onClose }: ClaimModalProps) {
     }, 1500); // Simulate network request
   };
 
-  const onScan = (result: any) => {
+  const onScan = (result: string | null) => {
     if (result && result.length > 0 && result[0].rawValue) {
       const scannedUrl = result[0].rawValue;
       // Extract code from URL like https://mosqrisk.vercel.app/claim?code=MOSQ-XXXX
@@ -243,7 +244,7 @@ export default function ClaimModal({ isOpen, onClose }: ClaimModalProps) {
                   </p>
                   <div className="w-full max-w-[200px] aspect-square bg-gray-100 rounded-2xl flex items-center justify-center shadow-inner relative overflow-hidden mb-4 p-2 border-4 border-[#EAC775]">
                     {/* Dummy QRIS Image */}
-                    <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=Pembayaran_QRIS_MosqRisk" alt="QRIS" className="w-full h-full object-contain mix-blend-multiply opacity-80" />
+                    <Image src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=Pembayaran_QRIS_MosqRisk" alt="QRIS" width={150} height={150} unoptimized className="w-full h-full object-contain mix-blend-multiply opacity-80" />
                     <div className="absolute top-2 left-2 bg-red-500 text-white text-[10px] font-black px-2 py-0.5 rounded shadow">QRIS</div>
                   </div>
                   <button

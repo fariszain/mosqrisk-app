@@ -1,6 +1,5 @@
 "use client";
 
-import Link from 'next/link';
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { useState, useEffect } from 'react';
@@ -12,7 +11,8 @@ export default function LaporPage() {
   const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
-    setIsMounted(true);
+    const t = setTimeout(() => setIsMounted(true), 0);
+    return () => clearTimeout(t);
   }, []);
 
   const handleGPS = () => {
@@ -21,14 +21,14 @@ export default function LaporPage() {
       return;
     }
     setLoadingGPS(true);
-    navigator.geolocation.getCurrentPosition(async (pos) => {
+    navigator.geolocation.getCurrentPosition(async (position) => {
       try {
-        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${pos.coords.latitude}&lon=${pos.coords.longitude}`);
+        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${position.coords.latitude}&lon=${position.coords.longitude}`);
         const data = await res.json();
         if (data && data.display_name) {
           setLocation(data.display_name);
         }
-      } catch (e) {
+      } catch {
         toast.error("Gagal melacak lokasi.");
       }
       setLoadingGPS(false);
@@ -60,7 +60,7 @@ export default function LaporPage() {
       } else {
         toast.error('Gagal mengirim laporan: ' + data.message);
       }
-    }).catch(err => {
+    }).catch(() => {
       toast.error('Terjadi kesalahan koneksi.');
     });
   };
@@ -78,9 +78,6 @@ export default function LaporPage() {
 
         <div className={`max-w-6xl mx-auto w-full grid grid-cols-1 lg:grid-cols-2 gap-12 items-center z-10 transition-all duration-1000 ease-out transform ${isMounted ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-8 scale-95'}`}>
           <div>
-            <div className="inline-block px-4 py-2 bg-primary/10 text-primary font-bold rounded-full mb-6 text-sm uppercase tracking-wider">
-              Partisipasi Masyarakat
-            </div>
             <h1 className="text-4xl md:text-5xl font-extrabold text-primary mb-6 leading-tight">Laporkan Kasus & Temuan Jentik</h1>
             <p className="text-on-surface-variant text-lg md:text-xl mb-8 leading-relaxed max-w-xl">
               Jadilah mata dan telinga untuk lingkungan Anda. Laporan Anda langsung terhubung ke dasbor pantauan dan membantu AI kami memperingatkan warga sekitar agar lebih waspada.

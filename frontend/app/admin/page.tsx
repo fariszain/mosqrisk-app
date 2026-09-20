@@ -4,9 +4,33 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { toast } from 'react-hot-toast';
 
+interface Report {
+  id: number;
+  report_type?: string;
+  [key: string]: unknown;
+}
+
+interface Subscriber {
+  id: number;
+  email?: string;
+  [key: string]: unknown;
+}
+
+const ExportButton = ({ onClick }: { onClick: () => void }) => (
+  <button onClick={onClick} className="bg-gray-50 text-gray-600 border border-gray-200 px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-gray-100 transition-colors">
+    <span className="material-symbols-outlined text-[18px]">download</span> Export CSV
+  </button>
+);
+
+const DeleteButton = ({ onClick, title }: { onClick: () => void, title: string }) => (
+  <button onClick={onClick} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors" title={title}>
+    <span className="material-symbols-outlined text-sm">delete</span>
+  </button>
+);
+
 export default function AdminDashboard() {
-  const [reports, setReports] = useState<any[]>([]);
-  const [subscribers, setSubscribers] = useState<any[]>([]);
+  const [reports, setReports] = useState<Report[]>([]);
+  const [subscribers, setSubscribers] = useState<Subscriber[]>([]);
   const [loading, setLoading] = useState(true);
   
   // Security State
@@ -20,27 +44,22 @@ export default function AdminDashboard() {
   useEffect(() => {
     if (!isAuthenticated) return;
     
-    setLoading(true);
+    const t = setTimeout(() => setLoading(true), 0);
     const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
     const headers = { 'Authorization': `Bearer ${pin}` };
 
+    const fetchAndParse = (url: string) => fetch(url, { headers }).then(async res => {
+      const text = await res.text();
+      try {
+        return { status: res.status, ok: res.ok, data: JSON.parse(text) };
+      } catch {
+        return { status: res.status, ok: res.ok, text };
+      }
+    });
+
     Promise.all([
-      fetch(`${API_URL}/api/reports`, { headers }).then(async res => {
-        const text = await res.text();
-        try {
-          return { status: res.status, ok: res.ok, data: JSON.parse(text) };
-        } catch {
-          return { status: res.status, ok: res.ok, text };
-        }
-      }),
-      fetch(`${API_URL}/api/subscribe`, { headers }).then(async res => {
-        const text = await res.text();
-        try {
-          return { status: res.status, ok: res.ok, data: JSON.parse(text) };
-        } catch {
-          return { status: res.status, ok: res.ok, text };
-        }
-      })
+      fetchAndParse(`${API_URL}/api/reports`),
+      fetchAndParse(`${API_URL}/api/subscribe`)
     ])
     .then(([reportsRes, subsRes]) => {
       if(reportsRes.ok && reportsRes.data?.success) {
@@ -61,7 +80,10 @@ export default function AdminDashboard() {
       console.error("Fetch error:", err);
       toast.error("Error jaringan saat memuat data");
     })
-    .finally(() => setLoading(false));
+    .finally(() => {
+      setLoading(false);
+      clearTimeout(t);
+    });
   }, [isAuthenticated, pin]);
 
   const totalReports = reports.length;
@@ -107,14 +129,14 @@ export default function AdminDashboard() {
       } else {
         toast.error('Gagal: ' + data.message);
       }
-    } catch (err) {
+    } catch {
       toast.error('Error koneksi ke server.');
     } finally {
       setIsBroadcasting(false);
     }
   };
 
-  const exportCSV = (data: any[], filename: string) => {
+  const exportCSV = (data: Record<string, unknown>[], filename: string) => {
     if (!data.length) return;
     const headers = Object.keys(data[0]);
     const csv = [headers.join(','), ...data.map(row => headers.map(h => `"${String(row[h] ?? '').replace(/"/g, '""')}"`).join(','))].join('\n');
@@ -147,7 +169,7 @@ export default function AdminDashboard() {
         setReports(previousReports);
         toast.error('Gagal menghapus laporan: ' + data.message);
       }
-    } catch (err) {
+    } catch {
       setReports(previousReports);
       toast.error('Error koneksi ke server.');
     }
@@ -173,7 +195,7 @@ export default function AdminDashboard() {
         setSubscribers(previousSubscribers);
         toast.error('Gagal menghapus pelanggan: ' + data.message);
       }
-    } catch (err) {
+    } catch {
       setSubscribers(previousSubscribers);
       toast.error('Error koneksi ke server.');
     }
@@ -300,9 +322,7 @@ export default function AdminDashboard() {
               <h3 className="font-black text-xl text-[#1A3626] uppercase tracking-tight">Data Pelaporan Terbaru</h3>
               <p className="text-sm text-gray-500 font-medium mt-1">Laporan masuk dari warga secara real-time</p>
             </div>
-            <button onClick={() => exportCSV(reports, 'laporan_mosqrisk.csv')} className="bg-gray-50 text-gray-600 border border-gray-200 px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-gray-100 transition-colors">
-              <span className="material-symbols-outlined text-[18px]">download</span> Export CSV
-            </button>
+            <ExportButton onClick={() => exportCSV(reports, 'laporan_mosqrisk.csv')} />
           </div>
           
           <div className="overflow-x-auto">
@@ -351,13 +371,7 @@ export default function AdminDashboard() {
                       {r.description || '-'}
                     </td>
                     <td className="p-5 text-right pr-8">
-                      <button 
-                        onClick={() => handleDeleteReport(r.id)}
-                        className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                        title="Hapus Laporan"
-                      >
-                        <span className="material-symbols-outlined text-sm">delete</span>
-                      </button>
+                      <DeleteButton onClick={() => handleDeleteReport(r.id)} title="Hapus Laporan" />
                     </td>
                   </tr>
                 ))}
@@ -373,9 +387,7 @@ export default function AdminDashboard() {
               <h3 className="font-black text-xl text-[#1A3626] uppercase tracking-tight">Database Pelanggan</h3>
               <p className="text-sm text-gray-500 font-medium mt-1">Total <span className="font-bold text-[#EAC775]">{totalSubscribers} email</span> terdaftar untuk peringatan dini</p>
             </div>
-            <button onClick={() => exportCSV(subscribers, 'pelanggan_mosqrisk.csv')} className="bg-gray-50 text-gray-600 border border-gray-200 px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-gray-100 transition-colors">
-              <span className="material-symbols-outlined text-[18px]">download</span> Export CSV
-            </button>
+            <ExportButton onClick={() => exportCSV(subscribers, 'pelanggan_mosqrisk.csv')} />
           </div>
           
           <div className="overflow-x-auto">
@@ -412,13 +424,7 @@ export default function AdminDashboard() {
                       </span>
                     </td>
                     <td className="p-5 text-right pr-8">
-                      <button 
-                        onClick={() => handleDeleteSubscriber(s.id)}
-                        className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                        title="Hapus Pelanggan"
-                      >
-                        <span className="material-symbols-outlined text-sm">delete</span>
-                      </button>
+                      <DeleteButton onClick={() => handleDeleteSubscriber(s.id)} title="Hapus Pelanggan" />
                     </td>
                   </tr>
                 ))}

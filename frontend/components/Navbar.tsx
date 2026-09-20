@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabase";
+import Image from "next/image";
 
 interface NavbarProps {
   rightAction?: React.ReactNode;
@@ -12,26 +12,11 @@ interface NavbarProps {
 export default function Navbar({ rightAction }: NavbarProps) {
   const pathname = usePathname();
   const [isMounted, setIsMounted] = useState(false);
-  const [user, setUser] = useState<any>(null);
 
   useEffect(() => {
-    setIsMounted(true);
-    const checkUser = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      setUser(session?.user || null);
-    };
-    checkUser();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user || null);
-    });
-
-    return () => subscription.unsubscribe();
+    const t = setTimeout(() => setIsMounted(true), 10);
+    return () => clearTimeout(t);
   }, []);
-
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-  };
 
   const isActive = (path: string) => pathname === path;
 
@@ -42,14 +27,13 @@ export default function Navbar({ rightAction }: NavbarProps) {
           
           {/* Left: Logo */}
           <Link href="/" className="flex items-center gap-3 group cursor-pointer shrink-0">
-            <img 
-              className="h-8 object-contain transition-transform group-hover:scale-105" 
+            <Image 
+              src="/logonavbar.png" 
               alt="MosqRisk Logo" 
-              src="/logonavbar.png"
-              onError={(e) => {
-                e.currentTarget.style.display = 'none';
-                e.currentTarget.nextElementSibling?.classList.remove('hidden');
-              }}
+              width={1500}
+              height={1500}
+              quality={100}
+              className="h-8 w-auto object-contain drop-shadow-sm group-hover:rotate-12 transition-transform duration-300"
             />
             <div className="hidden w-8 h-8 bg-[#1A3626] rounded-xl items-center justify-center text-white font-bold text-lg group-hover:scale-105 transition-transform shadow-md">
               M
@@ -67,6 +51,9 @@ export default function Navbar({ rightAction }: NavbarProps) {
             </Link>
             <Link href="/lapor" className={`${isActive('/lapor') ? 'text-[#1A3626]' : 'text-gray-500'} hover:text-[#1A3626] font-bold text-[15px] transition-colors`}>
               Lapor Warga
+            </Link>
+            <Link href="/edukasi" className={`${isActive('/edukasi') ? 'text-[#1A3626]' : 'text-gray-500'} hover:text-[#1A3626] font-bold text-[15px] transition-colors`}>
+              Edukasi
             </Link>
           </div>
 
