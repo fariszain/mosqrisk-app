@@ -1,0 +1,128 @@
+[
+  {
+    "page": "/",
+    "width": 1440,
+    "height": 3226,
+    "overflowX": 0,
+    "errors": [
+      "console: Refused to execute inline script because it violates the following Content Security Policy directive: \"script-src 'self' https://snap-assets.sandbox.midtrans.com https://api.sandbox.midtrans.com https"
+    ]
+  },
+  {
+    "page": "/pantau",
+    "width": 1440,
+    "height": 1392,
+    "overflowX": 0,
+    "errors": [
+      "console: Refused to execute inline script because it violates the following Content Security Policy directive: \"script-src 'self' https://snap-assets.sandbox.midtrans.com https://api.sandbox.midtrans.com https"
+    ]
+  },
+  {
+    "page": "/lapor",
+    "width": 1440,
+    "height": 1311,
+    "overflowX": 0,
+    "errors": [
+      "console: Refused to execute inline script because it violates the following Content Security Policy directive: \"script-src 'self' https://snap-assets.sandbox.midtrans.com https://api.sandbox.midtrans.com https"
+    ]
+  },
+  {
+    "page": "/edukasi",
+    "width": 1440,
+    "height": 7077,
+    "overflowX": 0,
+    "errors": [
+      "console: Refused to execute inline script because it violates the following Content Security Policy directive: \"script-src 'self' https://snap-assets.sandbox.midtrans.com https://api.sandbox.midtrans.com https"
+    ]
+  },
+  {
+    "page": "/checkout",
+    "width": 1440,
+    "height": 1962,
+    "overflowX": 0,
+    "errors": [
+      "console: Refused to execute inline script because it violates the following Content Security Policy directive: \"script-src 'self' https://snap-assets.sandbox.midtrans.com https://api.sandbox.midtrans.com https"
+    ]
+  },
+  {
+    "page": "/claim",
+    "width": 1440,
+    "height": 900,
+    "overflowX": 0,
+    "errors": [
+      "console: Refused to execute inline script because it violates the following Content Security Policy directive: \"script-src 'self' https://snap-assets.sandbox.midtrans.com https://api.sandbox.midtrans.com https"
+    ]
+  },
+  {
+    "page": "/admin",
+    "width": 1440,
+    "height": 900,
+    "overflowX": 0,
+    "errors": [
+      "console: Refused to execute inline script because it violates the following Content Security Policy directive: \"script-src 'self' https://snap-assets.sandbox.midtrans.com https://api.sandbox.midtrans.com https"
+    ]
+  },
+  {
+    "page": "/",
+    "width": 390,
+    "height": 4921,
+    "overflowX": 0,
+    "errors": [
+      "console: Refused to execute inline script because it violates the following Content Security Policy directive: \"script-src 'self' https://snap-assets.sandbox.midtrans.com https://api.sandbox.midtrans.com https"
+    ]
+  },
+  {
+    "page": "/pantau",
+    "width": 390,
+    "height": 2727,
+    "overflowX": 0,
+    "errors": [
+      "console: Refused to execute inline script because it violates the following Content Security Policy directive: \"script-src 'self' https://snap-assets.sandbox.midtrans.com https://api.sandbox.midtrans.com https"
+    ]
+  },
+  {
+    "page": "/lapor",
+    "width": 390,
+    "height": 2578,
+    "overflowX": 0,
+    "errors": [
+      "console: Refused to execute inline script because it violates the following Content Security Policy directive: \"script-src 'self' https://snap-assets.sandbox.midtrans.com https://api.sandbox.midtrans.com https"
+    ]
+  },
+  {
+    "page": "/edukasi",
+    "width": 390,
+    "height": 12539,
+    "overflowX": 0,
+    "errors": [
+      "console: Refused to execute inline script because it violates the following Content Security Policy directive: \"script-src 'self' https://snap-assets.sandbox.midtrans.com https://api.sandbox.midtrans.com https"
+    ]
+  },
+  {
+    "page": "/checkout",
+    "width": 390,
+    "height": 3037,
+    "overflowX": 0,
+    "errors": [
+      "console: Refused to execute inline script because it violates the following Content Security Policy directive: \"script-src 'self' https://snap-assets.sandbox.midtrans.com https://api.sandbox.midtrans.com https"
+    ]
+  },
+  {
+    "page": "/claim",
+    "width": 390,
+    "height": 908,
+    "overflowX": 0,
+    "errors": [
+      "console: Refused to execute inline script because it violates the following Content Security Policy directive: \"script-src 'self' https://snap-assets.sandbox.midtrans.com https://api.sandbox.midtrans.com https"
+    ]
+  },
+  {
+    "page": "/admin",
+    "width": 390,
+    "height": 908,
+    "overflowX": 0,
+    "errors": [
+      "console: Refused to execute inline script because it violates the following Content Security Policy directive: \"script-src 'self' https://snap-assets.sandbox.midtrans.com https://api.sandbox.midtrans.com https"
+    ]
+  }
+]

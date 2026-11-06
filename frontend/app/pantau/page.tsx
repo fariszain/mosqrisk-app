@@ -26,7 +26,6 @@ export default function MosqRiskDashboard() {
   const [subscribedEmail, setSubscribedEmail] = useState("");
   const [subscribedLocation, setSubscribedLocation] = useState("");
   const [isPremium, setIsPremium] = useState(false);
-  const [impactKg, setImpactKg] = useState(2.5);
   const [user, setUser] = useState<Record<string, unknown> | null>(null);
 
   // State untuk Dropdown Lokasi Emsifa (Moved up to fix variable hoisting)
@@ -47,12 +46,10 @@ export default function MosqRiskDashboard() {
     const checkUser = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
+        // Login ≠ berlangganan. Email hanya diisi otomatis; status "terdaftar" baru diset
+        // setelah pengguna menekan "Daftar Sekarang" (handleWASubmit) — persetujuan eksplisit.
         setUser(session.user as Record<string, unknown>);
         setWaNumber(session.user.email || '');
-        setIsEmailRegistered(true);
-        setSubscribedEmail(session.user.email || '');
-        localStorage.setItem('emailRegistered', 'true');
-        localStorage.setItem('subscribedEmail', session.user.email || '');
       }
     };
     checkUser();
@@ -76,15 +73,7 @@ export default function MosqRiskDashboard() {
         setSubscribedLocation(localStorage.getItem('subscribedLocation') || "");
       }
     }
-    
-    // Fetch dynamic impact stats
-    const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
-    fetch(`${API_URL}/api/stats`)
-      .then(res => res.json())
-      .then(data => {
-        if (data.success) setImpactKg(data.impact_kg);
-      })
-      .catch(err => console.error("Failed to fetch stats:", err));
+    // (Dulu di sini mengambil "impact_kg" dari /api/stats — angka hasil rumus karangan, sudah dihapus.)
   }, [router]);
 
   const handleWASubmit = async () => {
@@ -396,20 +385,21 @@ export default function MosqRiskDashboard() {
                   <span className="material-symbols-outlined text-[14px]">radar</span> PERINGATAN DINI GEOSPASIAL
                 </div>
                 <div className="text-xs text-[#1A3626]/90 font-medium leading-relaxed">
+                  {/* Skor hanya mengukur kesesuaian cuaca bagi nyamuk (BMKG) — bukan data kasus DBD. */}
                   {mosqRiskData.risk_status === 'TINGGI' ? (
                     <>
                       <span className="text-red-700 font-bold bg-red-100 px-1.5 py-0.5 rounded shadow-sm mr-1">AWAS</span>
-                      Sistem mendeteksi cuaca yang sangat mendukung perkembangbiakan nyamuk. Ada potensi lonjakan kasus di area Anda.
+                      Prakiraan cuaca sangat mendukung perkembangbiakan nyamuk. Tingkatkan kewaspadaan dan lakukan 3M Plus.
                     </>
                   ) : mosqRiskData.risk_status === 'SEDANG' ? (
                     <>
                       <span className="text-yellow-700 font-bold bg-yellow-100 px-1.5 py-0.5 rounded shadow-sm mr-1">SIAGA</span>
-                      Kondisi lingkungan cukup mendukung aktivitas nyamuk. Tetap waspada walau belum ada lonjakan kasus.
+                      Prakiraan cuaca cukup mendukung aktivitas nyamuk. Tetap waspada terhadap genangan air.
                     </>
                   ) : (
                     <>
-                      <span className="text-green-700 font-bold bg-green-100 px-1.5 py-0.5 rounded shadow-sm mr-1">AMAN</span>
-                      Tidak ada laporan kasus positif DBD dari tetangga di radius 1 KM dari Anda saat ini.
+                      <span className="text-green-700 font-bold bg-green-100 px-1.5 py-0.5 rounded shadow-sm mr-1">RENDAH</span>
+                      Prakiraan cuaca kurang mendukung perkembangbiakan nyamuk. Tetap jaga kebersihan lingkungan.
                     </>
                   )}
                 </div>
@@ -444,20 +434,17 @@ export default function MosqRiskDashboard() {
                 TINDAKAN DISARANKAN
               </h3>
               <p className="font-body-md text-body-md text-white/90 mb-6 leading-relaxed">
-                {mosqRiskData 
-                  ? (mosqRiskData.risk_status === 'TINGGI' ? "Aktivitas nyamuk sedang tinggi. Gunakan semprotan Patchmos setiap 3-4 jam. Prioritaskan perlindungan area kamar tidur anak." : "Aktivitas nyamuk normal. Gunakan Patchmos saat beraktivitas di luar ruangan atau saat tidur.") 
+                {mosqRiskData
+                  ? (mosqRiskData.risk_status === 'TINGGI' ? "Cuaca sangat mendukung nyamuk berkembang biak. Kuras dan tutup penampungan air, singkirkan barang bekas yang bisa menampung air, dan lindungi diri dari gigitan nyamuk." : "Tetap lakukan 3M Plus secara rutin dan lindungi diri dari gigitan nyamuk saat beraktivitas, terutama pagi dan sore hari.")
                   : "Menunggu pemilihan lokasi untuk memberikan saran yang akurat."}
               </p>
-              <div className="flex items-center gap-2 font-label-md text-xs md:text-label-md text-[#EAC775] mb-6 md:mb-8 bg-black/30 p-3 rounded-lg w-fit border border-[#EAC775]/30">
-                <span className="material-symbols-outlined text-[16px] md:text-[18px]">timer</span>
-                Estimasi Proteksi: {mosqRiskData ? "4" : "-"} Jam
-              </div>
+              {/* "Estimasi Proteksi: 4 Jam" dihapus — angka tetap tanpa dasar; uji efikasi produk belum dilakukan. */}
               {isPremium ? (
                 <Link
                   href="/checkout"
                   className="w-full bg-[#EAC775] text-[#1A3626] font-black py-3 md:py-4 rounded-xl flex items-center justify-center gap-2 hover:bg-[#d4b05a] transition-all duration-200 hover:scale-[1.02] active:scale-95 shadow-lg border border-yellow-400"
                 >
-                  <span className="text-lg">👑</span> Beli Ulang (Diskon Premium 15%)
+                  Beli Patchmos Lagi
                 </Link>
               ) : (
                 <Link
@@ -582,7 +569,7 @@ export default function MosqRiskDashboard() {
                       Fitur Terkunci
                       <br/>
                       <span className="font-medium text-[11px] md:text-xs text-[#1A3626]/80 mt-1.5 block max-w-xs mx-auto">
-                        Berlangganan Premium untuk membuka akses Prakiraan Risiko H+3.
+                        Berlangganan Premium untuk membuka akses Prakiraan Risiko 3 Hari.
                       </span>
                     </p>
                     <button className="mt-4 bg-[#EAC775] text-[#1A3626] font-bold text-xs md:text-sm px-5 py-2 rounded-xl shadow-md hover:bg-[#d4b05a] hover:scale-105 transition-all">
@@ -619,8 +606,8 @@ export default function MosqRiskDashboard() {
               <span className="material-symbols-outlined text-lg md:text-3xl">eco</span>
             </div>
             <div>
-              <p className="font-body-md text-sm md:text-body-md text-on-surface-variant mb-1">Dampak Lingkungan</p>
-              <p className="font-label-md text-sm md:text-label-md text-on-surface">Bulan ini, Anda telah membantu menyelamatkan <strong className="text-primary">{impactKg} kg</strong> limbah ampas nilam Aceh.</p>
+              <p className="font-body-md text-sm md:text-body-md text-on-surface-variant mb-1">Dari Limbah Nilam</p>
+              <p className="font-label-md text-sm md:text-label-md text-on-surface">Penyulingan nilam hanya menghasilkan sekitar 1,5–3% minyak; lebih dari 95% sisanya limbah padat yang umumnya belum dimanfaatkan (Indriani dkk., 2025). Patchmos memakai ampas inilah sebagai sumber bahan aktif.</p>
             </div>
           </div>
         </div>
@@ -736,14 +723,17 @@ export default function MosqRiskDashboard() {
                 >
                   <span className="material-symbols-outlined text-sm">logout</span> Logout
                 </button>
+                <p className="text-xs text-on-surface-variant text-center leading-relaxed">
+                  Logout tidak menghentikan email. Untuk berhenti berlangganan, balas email MosqRisk dengan kata BERHENTI.
+                </p>
               </div>
             ) : (
               <>
                 <p className="text-sm text-on-surface-variant mb-6">
                   {user ? (
-                    <span>Sistem mendeteksi Anda login dengan email <strong className="text-primary">{user.email}</strong>. Aktifkan peringatan otomatis untuk mendeteksi lonjakan risiko di daerah <strong>{locationName || "Anda"}</strong>?</span>
+                    <span>Kamu login dengan email <strong className="text-primary">{user.email}</strong>. Aktifkan notifikasi email untuk wilayah <strong>{locationName || "ini"}</strong>? Kamu akan menerima email saat ada laporan warga di wilayah ini atau saat tim MosqRisk mengirim peringatan.</span>
                   ) : (
-                    <span>Anda harus Login menggunakan akun Google Anda terlebih dahulu untuk mengaktifkan peringatan otomatis.</span>
+                    <span>Login dengan akun Google dulu untuk mengaktifkan notifikasi email.</span>
                   )}
                 </p>
 
@@ -783,7 +773,7 @@ export default function MosqRiskDashboard() {
             </div>
             <h3 className="text-xl font-bold text-[#1A3626] mb-2">Fitur Khusus Premium</h3>
             <p className="text-sm text-gray-500 mb-6">
-              Fitur Peringatan Dini Otomatis (Email Alert) hanya tersedia untuk pengguna Premium. Beli Patchmos Spray untuk mendapatkan kode akses Premium di dalam kemasannya!
+              Notifikasi email (laporan warga di wilayahmu & peringatan dari tim) dan prakiraan risiko 3 hari tersedia untuk pengguna Premium. Kode akses Premium ada di kemasan Patchmos Spray.
             </p>
             <div className="flex flex-col gap-3">
               <Link href="/checkout" className="w-full bg-[#1A3626] text-white font-bold py-3 rounded-xl hover:bg-[#0c1f13] transition-all">
@@ -797,7 +787,7 @@ export default function MosqRiskDashboard() {
         </div>
       )}
 
-      {/* Footer Nasional Kemenkes */}
+      {/* Footer global */}
       <Footer />
 
     </div>

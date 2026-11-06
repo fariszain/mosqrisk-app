@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { toast } from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
+import SalesPanel, { selCSV } from '@/components/admin/SalesPanel';
 
 interface Report {
   id: number;
@@ -138,7 +139,7 @@ export default function AdminDashboard() {
   };
 
   const handleBroadcast = async () => {
-    if (!confirm('Apakah Anda yakin ingin menyiarkan Peringatan Bahaya ke SEMUA alamat email yang terdaftar?')) return;
+    if (!confirm('Kirim email peringatan kewaspadaan DBD ke SEMUA pelanggan terdaftar? (Belum ditarget per tingkat risiko wilayah.)')) return;
     
     setIsBroadcasting(true);
     try {
@@ -163,7 +164,7 @@ export default function AdminDashboard() {
   const exportCSV = (data: Record<string, unknown>[], filename: string) => {
     if (!data.length) return;
     const headers = Object.keys(data[0]);
-    const csv = [headers.join(','), ...data.map(row => headers.map(h => `"${String(row[h] ?? '').replace(/"/g, '""')}"`).join(','))].join('\n');
+    const csv = [headers.join(','), ...data.map(row => headers.map(h => selCSV(row[h])).join(','))].join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -382,7 +383,7 @@ export default function AdminDashboard() {
               <span className="material-symbols-outlined text-3xl">health_and_safety</span>
             </div>
             <div className="relative z-10">
-              <p className="text-sm text-gray-500 font-medium mb-1">Indikasi Kasus DBD</p>
+              <p className="text-sm text-gray-500 font-medium mb-1">Laporan Suspect DBD</p>
               <h2 className="text-4xl font-bold text-gray-900 tracking-tight">{loading ? '...' : dbdCases}</h2>
             </div>
           </motion.div>
@@ -398,11 +399,14 @@ export default function AdminDashboard() {
               <span className="material-symbols-outlined text-3xl">bug_report</span>
             </div>
             <div className="relative z-10">
-              <p className="text-sm text-gray-500 font-medium mb-1">Populasi Nyamuk</p>
+              <p className="text-sm text-gray-500 font-medium mb-1">Laporan Jentik</p>
               <h2 className="text-4xl font-bold text-gray-900 tracking-tight">{loading ? '...' : nyamukCases}</h2>
             </div>
           </motion.div>
         </motion.div>
+
+        {/* Penjualan online + offline (tabel orders) */}
+        <SalesPanel pin={pin} apiUrl={process.env.NEXT_PUBLIC_API_URL || ''} />
 
         {/* Global Search Bar - Interactive */}
         <motion.div 

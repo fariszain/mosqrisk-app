@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { useState, useEffect } from 'react';
@@ -42,23 +43,24 @@ export default function LaporPage() {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+    // Nama & kontak pelapor tidak dikumpulkan lagi — dulu diminta di form tetapi tidak pernah disimpan.
     fetch(`${API_URL}/api/reports`, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({
-        name: formData.get('name'),
-        contact: formData.get('contact'),
         locationName: location || formData.get('location') || 'Tidak Diketahui',
         description: formData.get('description'),
         reportType: formData.get('type')
       })
-    }).then(res=>res.json()).then(data=>{
+    }).then(async res => ({ status: res.status, data: await res.json() })).then(({ status, data }) => {
       if(data.success) {
-        toast.success('Laporan berhasil dikirim! Peringatan dini telah diproses untuk area Anda.');
+        toast.success('Laporan terkirim. Terima kasih! Laporan diteruskan ke pelanggan notifikasi di wilayah yang sama (jika ada).');
         (e.target as HTMLFormElement).reset();
         setLocation('');
+      } else if (status === 422) {
+        toast.error('Periksa lagi isian laporan: lokasi dan deskripsi wajib diisi.');
       } else {
-        toast.error('Gagal mengirim laporan: ' + data.message);
+        toast.error(data.message || 'Gagal mengirim laporan.');
       }
     }).catch(() => {
       toast.error('Terjadi kesalahan koneksi.');
@@ -80,7 +82,7 @@ export default function LaporPage() {
           <div>
             <h1 className="text-4xl md:text-5xl font-extrabold text-primary mb-6 leading-tight">Laporkan Kasus & Temuan Jentik</h1>
             <p className="text-on-surface-variant text-lg md:text-xl mb-8 leading-relaxed max-w-xl">
-              Jadilah mata dan telinga untuk lingkungan Anda. Laporan Anda langsung terhubung ke dasbor pantauan dan membantu AI kami memperingatkan warga sekitar agar lebih waspada.
+              Jadilah mata dan telinga untuk lingkungan Anda. Laporan tercatat di dasbor tim MosqRisk dan diteruskan lewat email ke warga yang berlangganan notifikasi di wilayah yang sama.
             </p>
             
             <div className="space-y-6">
@@ -100,7 +102,7 @@ export default function LaporPage() {
                 </div>
                 <div>
                   <h3 className="font-bold text-lg text-on-surface">Kasus Suspect DBD</h3>
-                  <p className="text-on-surface-variant text-sm">Laporkan jika ada anggota keluarga atau tetangga yang dirawat karena gejala demam berdarah.</p>
+                  <p className="text-on-surface-variant text-sm">Laporkan jika ada warga sekitar yang dirawat karena gejala demam berdarah — tanpa menyebut nama atau data pribadinya.</p>
                 </div>
               </div>
 
@@ -109,8 +111,8 @@ export default function LaporPage() {
                   <span className="material-symbols-outlined">security</span>
                 </div>
                 <div>
-                  <h3 className="font-bold text-lg text-on-surface">Lindungi Sekitar</h3>
-                  <p className="text-on-surface-variant text-sm">Setiap laporan Anda akan meningkatkan Skor Risiko di wilayah Anda untuk memberi peringatan ke warga lain.</p>
+                  <h3 className="font-bold text-lg text-on-surface">Kabari Tetangga</h3>
+                  <p className="text-on-surface-variant text-sm">Laporan diteruskan lewat email ke warga yang berlangganan notifikasi di wilayah yang sama. Laporan tidak mengubah skor risiko — skor dihitung dari prakiraan cuaca BMKG.</p>
                 </div>
               </div>
             </div>
@@ -123,17 +125,6 @@ export default function LaporPage() {
             <h2 className="text-2xl font-bold text-on-surface mb-6">Formulir Laporan Cepat</h2>
             
             <form onSubmit={handleSubmit} className="flex flex-col gap-5">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                <div>
-                  <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-2">Nama Pelapor</label>
-                  <input type="text" name="name" required placeholder="Nama Anda" className="w-full bg-background border border-outline/20 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all shadow-sm" />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-2">Kontak (Email / HP)</label>
-                  <input type="text" name="contact" required placeholder="Email / No HP Anda" className="w-full bg-background border border-outline/20 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all shadow-sm" />
-                </div>
-              </div>
-
               <div>
                 <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-2">Lokasi Temuan</label>
                 <div className="relative flex gap-2">
@@ -158,10 +149,15 @@ export default function LaporPage() {
 
               <div>
                 <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-2">Deskripsi Detail</label>
-                <textarea name="description" required placeholder="Ceritakan detail temuan Anda..." rows={4} className="w-full bg-background border border-outline/20 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all shadow-sm resize-none"></textarea>
+                <textarea name="description" required minLength={3} maxLength={1000} placeholder="Ceritakan detail temuan Anda..." rows={4} className="w-full bg-background border border-outline/20 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all shadow-sm resize-none"></textarea>
               </div>
-              
-              <button type="submit" className="w-full bg-primary text-white font-bold py-4 rounded-xl hover:bg-primary/90 transition-all hover:scale-[1.02] active:scale-95 mt-4 shadow-lg flex items-center justify-center gap-2">
+
+              <p className="text-xs text-on-surface-variant leading-relaxed">
+                Jenis, lokasi, dan deskripsi laporan disimpan dan dapat diteruskan lewat email ke pelanggan notifikasi di wilayah yang sama.
+                Jangan cantumkan nama, nomor telepon, atau data pribadi orang lain. Lihat <Link href="/privasi" className="underline underline-offset-2 text-primary">Kebijakan Privasi</Link>.
+              </p>
+
+              <button type="submit" className="w-full bg-primary text-white font-bold py-4 rounded-xl hover:bg-primary/90 transition-all hover:scale-[1.02] active:scale-95 mt-2 shadow-lg flex items-center justify-center gap-2">
                 <span className="material-symbols-outlined">send</span>
                 Kirim Laporan
               </button>

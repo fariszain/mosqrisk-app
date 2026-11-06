@@ -1,7 +1,7 @@
 {
   "name": "MosqRisk",
   "short_name": "MosqRisk",
-  "description": "Aplikasi peringatan dini risiko Demam Berdarah Dengue (DBD) berbasis cuaca BMKG dan AI.",
+  "description": "Pantau risiko nyamuk DBD di wilayahmu dari prakiraan cuaca BMKG, dan kenali Patchmos, spray bio-repellent dari ampas nilam Aceh.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",

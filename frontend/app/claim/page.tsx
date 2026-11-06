@@ -43,7 +43,8 @@ export default function ClaimPage() {
         setStatus("success");
       } else {
         setStatus("error");
-        setErrorMessage(data.message);
+        // 422 (format kode tidak valid) tidak membawa "message" → beri pesan yang jelas
+        setErrorMessage(data.message || "Kode tidak valid atau tidak ditemukan.");
       }
     } catch {
       setStatus("error");
@@ -63,17 +64,17 @@ export default function ClaimPage() {
           
           <h1 className="text-2xl font-black text-[#1A3626] mb-2 tracking-tight">Klaim Akses Premium</h1>
           <p className="text-gray-500 mb-8 text-sm">
-            Masukkan kode unik dari dalam kotak kemasan Patchmos Spray untuk mengaktifkan fitur analitik tingkat lanjut.
+            Masukkan kode unik dari kemasan Patchmos Spray untuk membuka prakiraan risiko 3 hari dan notifikasi email.
           </p>
 
           {status === "success" ? (
             <div className="animate-in zoom-in duration-300">
               <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-6">
                 <span className="material-symbols-outlined text-green-500 text-3xl mb-2">check_circle</span>
-                <p className="text-green-700 font-bold text-sm">Berhasil! Akun Anda kini berstatus Premium selama 30 Hari.</p>
+                <p className="text-green-700 font-bold text-sm">Berhasil! Akses Premium aktif di perangkat ini.</p>
               </div>
-              <button onClick={() => router.push("/")} className="w-full bg-[#1A3626] text-white font-black py-4 rounded-[1rem] transition-all hover:bg-[#0c1f13] shadow-lg">
-                Ke Dashboard MosqRisk
+              <button onClick={() => router.push("/pantau")} className="w-full bg-[#1A3626] text-white font-black py-4 rounded-[1rem] transition-all hover:bg-[#0c1f13] shadow-lg">
+                Buka Peta Pantauan
               </button>
             </div>
           ) : (
@@ -113,8 +114,8 @@ export default function ClaimPage() {
 
         </div>
         
-        <div className="mt-8 text-center text-xs font-bold text-gray-400">
-          *Satu kode unik hanya dapat digunakan 1 kali oleh 1 akun.
+        <div className="mt-8 text-center text-xs font-bold text-gray-500 leading-relaxed">
+          Satu kode hanya dapat diklaim satu kali. Status Premium tersimpan di browser yang dipakai saat klaim.
         </div>
       </div>
     </div>

@@ -1,507 +1,392 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import Image from "next/image";
+import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
+import Script from "next/script";
 import { toast } from 'react-hot-toast';
 
 import Navbar from "@/components/Navbar";
 
+// Harga, batas jumlah, dan mode pembayaran datang dari backend (GET /api/produk) —
+// satu-satunya sumber harga ada di backend/main.py (HARGA_PER_BOTOL).
+type InfoProduk = {
+  nama: string;
+  harga_per_botol: number;
+  maks_per_pesanan: number;
+  pembayaran: { mode: "produksi" | "uji_coba"; snap_url: string; client_key: string };
+};
+
+type HasilBayar = "dibayar" | "menunggu_pembayaran" | "gagal" | "batal" | "ditutup";
+
+type SnapCallbacks = {
+  onSuccess?: (result: unknown) => void;
+  onPending?: (result: unknown) => void;
+  onError?: (result: unknown) => void;
+  onClose?: () => void;
+};
+
+declare global {
+  interface Window {
+    snap?: { pay: (token: string, callbacks: SnapCallbacks) => void };
+  }
+}
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+const rupiah = (n: number) => `Rp${n.toLocaleString('id-ID')}`;
+
+const inputClass = "w-full bg-gray-50 border border-gray-200 rounded-2xl px-5 py-4 text-base font-medium focus:outline-none focus:border-[#1A3626] focus:ring-4 focus:ring-[#1A3626]/10 transition-all text-gray-800 placeholder-gray-400";
+const labelClass = "block text-xs font-black text-gray-500 uppercase tracking-widest mb-3 ml-1";
+
 export default function CheckoutPage() {
-  const [isMounted, setIsMounted] = useState(false);
+  const [produk, setProduk] = useState<InfoProduk | null>(null);
+  const [gagalMuat, setGagalMuat] = useState(false);
+  const [snapSiap, setSnapSiap] = useState(false);
   const [quantity, setQuantity] = useState(1);
-  const [paymentMethod, setPaymentMethod] = useState("QRIS");
-  const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
-  const [isQrisModalOpen, setIsQrisModalOpen] = useState(false);
-  const [address, setAddress] = useState("KOTA BANDA ACEH, ACEH");
-  const [isLoadingAddress, setIsLoadingAddress] = useState(false);
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
+  const [address, setAddress] = useState("");
+  const [isLoadingAddress, setIsLoadingAddress] = useState(false);
+  const [memproses, setMemproses] = useState(false);
+  const [hasil, setHasil] = useState<HasilBayar | null>(null);
+  const [orderId, setOrderId] = useState("");
 
-  useEffect(() => {
-    const t = setTimeout(() => setIsMounted(true), 0);
-    if ("geolocation" in navigator) {
-    setTimeout(() => setIsLoadingAddress(true), 0);
-      navigator.geolocation.getCurrentPosition(
-        async (position) => {
-          try {
-            const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${position.coords.latitude}&lon=${position.coords.longitude}`);
-            const data = await res.json();
-            if (data && data.display_name) {
-              setAddress(data.display_name);
-            }
-          } catch (e) {
-            console.error(e);
-          } finally {
-            setIsLoadingAddress(false);
-          }
-        },
-        () => {
-          setIsLoadingAddress(false);
-        }
-      );
-    }
-    return () => clearTimeout(t);
+  const muatProduk = useCallback(() => {
+    setGagalMuat(false);
+    fetch(`${API_URL}/api/produk`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) setProduk(data);
+        else setGagalMuat(true);
+      })
+      .catch(() => setGagalMuat(true));
   }, []);
 
-  const pricePerBottle = 35000;
-  
-  let totalPrice = quantity * pricePerBottle;
-  if (quantity === 2) totalPrice = 65000;
-  if (quantity === 3) totalPrice = 90000;
+  useEffect(() => {
+    muatProduk();
+  }, [muatProduk]);
 
-  const handlePaymentVerification = () => {
-    setTimeout(() => {
-      setIsQrisModalOpen(false);
-      setIsSuccessModalOpen(true);
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('isPremium', 'true');
-      }
-    }, 1500);
+  const harga = produk?.harga_per_botol ?? 0;
+  const maks = produk?.maks_per_pesanan ?? 1;
+  const totalPrice = quantity * harga;
+  const modeUjiCoba = produk ? produk.pembayaran.mode !== "produksi" : false;
+  const clientKey = produk?.pembayaran.client_key || process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY || "";
+
+  const ubahJumlah = (n: number) => {
+    const bulat = Number.isFinite(n) ? Math.round(n) : 1;
+    setQuantity(Math.min(Math.max(1, bulat), maks));
   };
 
-  const handleCheckout = async () => {
+  // Lokasi hanya diambil kalau pembeli menekan tombol (tidak otomatis saat halaman dibuka).
+  const isiAlamatDariLokasi = () => {
+    if (!("geolocation" in navigator)) {
+      toast.error("Browser tidak mendukung lokasi. Ketik alamat secara manual.");
+      return;
+    }
+    setIsLoadingAddress(true);
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        try {
+          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${position.coords.latitude}&lon=${position.coords.longitude}`);
+          const data = await res.json();
+          if (data && data.display_name) {
+            setAddress(data.display_name);
+            toast.success("Alamat terisi dari lokasimu. Lengkapi nomor rumah & patokan.");
+          }
+        } catch {
+          toast.error("Gagal membaca lokasi. Ketik alamat secara manual.");
+        } finally {
+          setIsLoadingAddress(false);
+        }
+      },
+      () => {
+        toast.error("Izin lokasi ditolak. Ketik alamat secara manual.");
+        setIsLoadingAddress(false);
+      }
+    );
+  };
+
+  // Status pembayaran selalu dicek ke server (yang bertanya langsung ke Midtrans).
+  // dariTutup: dipanggil saat popup ditutup — kalau ternyata sudah dibayar (mis. QRIS), tetap tampil "diterima".
+  const cekStatusPembayaran = async (id: string, dariTutup = false) => {
+    let status: HasilBayar = "menunggu_pembayaran";
     try {
-      const toastId = toast.loading("Memproses pembayaran...");
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+      const res = await fetch(`${API_URL}/api/payment/status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId: id })
+      });
+      const data = await res.json();
+      if (data.success && data.status) status = data.status;
+    } catch {
+      // biarkan "menunggu_pembayaran" — status akan diperbarui lewat notifikasi Midtrans
+    }
+    if (status === "dibayar") {
+      localStorage.setItem("isPremium", "true");
+    }
+    setHasil(dariTutup && status === "menunggu_pembayaran" ? "ditutup" : status);
+  };
+
+  const handleOrder = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!produk) return;
+    if (!snapSiap || !window.snap) {
+      toast.error("Jendela pembayaran belum siap. Tunggu sebentar lalu coba lagi.");
+      return;
+    }
+    setMemproses(true);
+    const toastId = toast.loading("Menyiapkan pembayaran...");
+    try {
       const res = await fetch(`${API_URL}/api/payment/token`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: customerName,
-          phone: customerPhone,
-          package: quantity.toString(),
-          amount: totalPrice
+          name: customerName.trim(),
+          phone: customerPhone.trim(),
+          address: address.trim(),
+          quantity,
+          expectedTotal: totalPrice
         })
       });
       const data = await res.json();
       toast.dismiss(toastId);
-      
-      if (data.success && data.token) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (window as any).snap.pay(data.token, {
-          onSuccess: function() {
-            localStorage.setItem("isPremium", "true");
-            setIsQrisModalOpen(false);
-            setIsSuccessModalOpen(true);
-          },
-          onPending: function() {
-            toast.success("Menunggu pembayaran...");
-          },
-          onError: function() {
-            toast.error("Pembayaran gagal!");
-          },
-          onClose: function() {
-            toast.error("Anda menutup popup sebelum menyelesaikan pembayaran");
-          }
-        });
-      } else {
-        toast.error("Gagal memproses pembayaran: " + (data.message || "Unknown error"));
+
+      if (res.status === 409) {
+        toast.error(data.message || "Harga sudah diperbarui.");
+        muatProduk();
+        return;
       }
+      if (res.status === 422) {
+        toast.error("Periksa lagi nama, nomor HP, dan alamat pengiriman.");
+        return;
+      }
+      if (!res.ok || !data.success || !data.token) {
+        toast.error(data.message || "Gagal memproses pembayaran.");
+        return;
+      }
+
+      const id = data.order_id as string;
+      setOrderId(id);
+      window.snap.pay(data.token, {
+        onSuccess: () => { void cekStatusPembayaran(id); },
+        onPending: () => { void cekStatusPembayaran(id); },
+        onError: () => { setHasil("gagal"); },
+        onClose: () => { void cekStatusPembayaran(id, true); }
+      });
     } catch {
-      toast.error("Error menghubungi server");
+      toast.dismiss(toastId);
+      toast.error("Tidak bisa menghubungi server. Periksa koneksi lalu coba lagi.");
+    } finally {
+      setMemproses(false);
     }
   };
 
-  const handleOrder = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!customerName || !customerPhone || !address) {
-      toast.error("Mohon lengkapi data pengiriman");
-      return;
+  const pesanHasil: Record<HasilBayar, { judul: string; isi: string }> = {
+    dibayar: {
+      judul: "Pembayaran diterima",
+      isi: `Pesanan ${quantity} botol tercatat. Tim Patchmos akan menghubungi nomor HP yang kamu isi untuk mengatur pengiriman. Akses Premium MosqRisk juga aktif di perangkat ini.`
+    },
+    menunggu_pembayaran: {
+      judul: "Menunggu pembayaran",
+      isi: "Selesaikan pembayaran sesuai instruksi di jendela Midtrans. Status pesanan diperbarui setelah pembayaran terkonfirmasi."
+    },
+    gagal: {
+      judul: "Pembayaran tidak berhasil",
+      isi: "Pembayaran ditolak atau gagal diproses. Silakan coba lagi atau pilih metode lain."
+    },
+    batal: {
+      judul: "Pembayaran dibatalkan",
+      isi: "Transaksi dibatalkan atau kedaluwarsa. Kamu bisa membuat pesanan baru dari halaman ini."
+    },
+    ditutup: {
+      judul: "Pembayaran belum selesai",
+      isi: "Jendela pembayaran ditutup sebelum selesai. Pesanan tercatat dengan status menunggu pembayaran; kamu bisa mengulang dari halaman ini."
     }
-    handleCheckout();
   };
-
-  // Tema Warna Terinspirasi dari Card "Tindakan Disarankan" MosqRisk
-  const darkGreen = "bg-[#1A3626]";
-  const textDarkGreen = "text-[#1A3626]";
-  const goldAccent = "text-[#EAC775]";
-  const bgGoldAccent = "bg-[#EAC775]";
 
   return (
     <div className="min-h-screen bg-[#F4F6F5] font-sans text-gray-800 pb-20">
-      
-      {/* Navigation Bar */}
-      <Navbar rightAction={
-        <div className="flex items-center text-slate-600 gap-1.5 bg-slate-50 px-4 py-2 rounded-full border border-slate-200 shadow-sm max-w-[200px] sm:max-w-xs">
-          <span className="material-symbols-outlined text-danger text-[18px] shrink-0">location_on</span>
-          <span className="font-bold text-[13px] truncate" title={address}>{address ? address.split(',')[0].toUpperCase() : 'MENCARI LOKASI...'}</span>
-        </div>
-      } />
+      {produk && (
+        <Script
+          src={produk.pembayaran.snap_url}
+          data-client-key={clientKey}
+          strategy="afterInteractive"
+          onReady={() => setSnapSiap(true)}
+          onError={() => toast.error("Gagal memuat jendela pembayaran Midtrans. Periksa koneksi.")}
+        />
+      )}
 
-      {/* Premium Hero Banner */}
-      <div className="w-full relative overflow-hidden pt-32 pb-32 md:pt-40 md:pb-48 bg-gradient-to-br from-[#0c1f13] via-[#1A3626] to-[#0e261a] border-b border-[#EAC775]/20">
-        
-        {/* Glow Effects */}
-        <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-[#EAC775]/10 rounded-full blur-[120px] pointer-events-none"></div>
-        <div className="absolute bottom-[-20%] right-[-10%] w-[600px] h-[600px] bg-[#4ade80]/10 rounded-full blur-[150px] pointer-events-none"></div>
-        
-        {/* Subtle Grid Pattern */}
-        <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMiIgY3k9IjIiIHI9IjEiIGZpbGw9InJnYmEoMjU1LDI1NSwyNTUsMC4wNikiLz48L3N2Zz4=')] opacity-60 pointer-events-none"></div>
+      <Navbar />
 
-        {/* Decorative Spray Silhouette (Bigger, Better Positioned) */}
-        <div className="absolute right-[-10%] md:right-[0%] bottom-[-15%] opacity-40 w-[350px] h-[350px] md:w-[600px] md:h-[600px] pointer-events-none mix-blend-overlay transition-transform duration-1000 hover:scale-105">
-           <Image 
-              src="/spray-square-white.png"
-              alt="Spray Silhouette" 
-              width={600}
-              height={600}
-              className="w-full h-full object-contain filter drop-shadow-2xl" 
-            />
-        </div>
-
-        {/* Floating Abstract Elements */}
-        <div className="absolute left-[5%] top-[10%] opacity-10 transform -rotate-12 pointer-events-none">
-           <span className="material-symbols-outlined text-[180px] text-white">eco</span>
-        </div>
-        <div className="absolute right-[30%] top-[20%] w-3 h-3 rounded-full bg-[#EAC775] opacity-50 blur-[2px] pointer-events-none animate-pulse"></div>
-        <div className="absolute left-[40%] bottom-[20%] w-4 h-4 rounded-full bg-[#4ade80] opacity-30 blur-[1px] pointer-events-none animate-bounce-slow"></div>
-        <div className="absolute right-[45%] top-[45%] flex gap-2 opacity-20 pointer-events-none">
-           <div className="w-1.5 h-1.5 bg-white rounded-full"></div>
-           <div className="w-1.5 h-1.5 bg-white rounded-full"></div>
-           <div className="w-1.5 h-1.5 bg-white rounded-full"></div>
-        </div>
-        
-        <div className="max-w-7xl mx-auto px-4 relative z-10 flex flex-col md:flex-row items-start justify-between h-full">
-          <div className="max-w-2xl">
-            <div className={`inline-flex items-center gap-2 ${goldAccent} font-bold text-xs tracking-widest uppercase mb-4 px-3 py-1 bg-white/10 rounded-full border border-white/10 shadow-sm backdrop-blur-sm`}>
-              <span className="material-symbols-outlined text-[14px]">verified</span>
-              Eksklusif Regional Aceh
-            </div>
-            <h1 className="text-4xl md:text-5xl lg:text-6xl font-black mb-6 text-white tracking-tight leading-tight drop-shadow-lg">
-              PATCHMOS SPRAY <br className="hidden md:block"/>100% ALAMI
-            </h1>
-            <p className="text-gray-200 text-sm md:text-base leading-relaxed hidden md:block max-w-xl font-medium drop-shadow-md">
-              Perlindungan ekstra dari gigitan nyamuk, terbuat murni dari ekstrak nilam Aceh. Mendukung misi zero-waste dan kesejahteraan petani lokal.
-            </p>
-          </div>
+      {/* Hero */}
+      <div className="w-full bg-[#1A3626] pt-32 pb-20 md:pt-40 md:pb-24">
+        <div className="max-w-7xl mx-auto px-4">
+          <h1 className="text-4xl md:text-5xl lg:text-6xl font-black mb-4 text-white tracking-tight leading-tight">
+            Beli Patchmos Spray
+          </h1>
+          <p className="text-white/80 text-base md:text-lg leading-relaxed max-w-2xl font-medium">
+            Spray bio-repellent dengan bahan aktif dari ampas nilam Aceh. Tanpa DEET.
+          </p>
         </div>
       </div>
 
-      {/* Main Content Area */}
-      <div className={`max-w-7xl mx-auto px-4 transition-all duration-1000 transform ${isMounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-12'}`}>
-        
-        {/* Profile Card & Info Overlap - Fixed spacing and alignment */}
-        <div className="flex flex-col md:flex-row gap-6 items-center md:items-end relative z-20 mb-10 pl-2">
-          
-          {/* Square Image Card */}
-          <div className="w-36 h-36 md:w-48 md:h-48 -mt-16 md:-mt-24 bg-white rounded-[2rem] p-2 shadow-xl shadow-gray-200/80 flex-shrink-0 relative overflow-hidden group">
-             <div className="w-full h-full bg-gray-50 rounded-[1.5rem] flex flex-col items-center justify-center border border-gray-100 relative overflow-hidden group-hover:bg-gray-100 transition-colors duration-500">
-                <span className={`material-symbols-outlined text-[50px] md:text-[70px] ${textDarkGreen} drop-shadow-sm mb-2 relative z-10 group-hover:scale-110 transition-transform duration-500`} style={{fontVariationSettings: "'FILL' 1" }}>
-                  water_drop
-                </span>
-                <span className={`${textDarkGreen} font-black text-xs md:text-sm tracking-widest uppercase relative z-10`}>PATCHMOS</span>
-             </div>
+      <div className="max-w-7xl mx-auto px-4 -mt-10">
+        {modeUjiCoba && (
+          <div role="status" className="mb-8 bg-[#FFF7E0] border border-[#EAC775] text-[#5C4A12] rounded-2xl p-4 md:p-5 text-sm md:text-[15px] leading-relaxed shadow-sm">
+            <strong className="font-black">Mode uji coba.</strong> Pembayaran memakai sandbox Midtrans: tidak ada uang yang ditarik dan pesanan uji coba tidak dikirim.
           </div>
-          
-          {/* Title & Badges */}
-          <div className="flex-1 pb-2 md:pb-4 mt-6 md:mt-8 text-center md:text-left">
-            <h2 className={`text-2xl md:text-3xl font-black ${textDarkGreen} uppercase tracking-tight mb-3 drop-shadow-sm`}>MosqRisk Analytics</h2>
-            <div className="flex flex-wrap justify-center md:justify-start items-center gap-4 text-xs font-bold text-gray-600 bg-white/80 backdrop-blur-md px-5 py-2.5 rounded-full shadow-sm border border-gray-100 inline-flex">
-              <span className="flex items-center gap-1.5 text-[#D97706]"><span className="material-symbols-outlined text-[16px]">bolt</span> Proses Cepat</span>
-              <span className="w-1 h-1 bg-gray-300 rounded-full hidden sm:block"></span>
-              <span className="flex items-center gap-1.5"><span className="material-symbols-outlined text-[16px]">headset_mic</span> Layanan 24/7</span>
-              <span className="w-1 h-1 bg-gray-300 rounded-full hidden sm:block"></span>
-              <span className={`flex items-center gap-1.5 ${textDarkGreen}`}><span className="material-symbols-outlined text-[16px]">verified_user</span> Pembayaran Aman</span>
-            </div>
-          </div>
-        </div>
+        )}
 
-        {/* Info Bar - Better spacing */}
-        <div className="bg-white rounded-2xl p-4 md:p-5 flex flex-wrap items-center justify-center md:justify-start gap-6 md:gap-10 text-xs md:text-sm font-bold text-gray-500 mb-10 shadow-sm border border-gray-100">
-          <div className={`flex items-center gap-2 hover:text-[#1A3626] transition-colors cursor-default`}>
-            <span className={`material-symbols-outlined text-[20px] ${textDarkGreen}`}>verified</span>
-            Jaminan Kualitas
+        {gagalMuat && (
+          <div role="alert" className="mb-8 bg-white border border-red-200 text-red-700 rounded-2xl p-5 text-sm flex flex-col sm:flex-row sm:items-center gap-3 justify-between shadow-sm">
+            <span>Harga tidak dapat dimuat. Periksa koneksi, lalu coba lagi.</span>
+            <button type="button" onClick={muatProduk} className="bg-red-600 text-white font-bold px-5 py-3 rounded-xl min-h-[44px]">Muat ulang</button>
           </div>
-          <div className={`flex items-center gap-2 hover:text-[#1A3626] transition-colors cursor-default`}>
-            <span className={`material-symbols-outlined text-[20px] ${textDarkGreen}`}>eco</span>
-            100% Bahan Alami
-          </div>
-          <div className={`flex items-center gap-2 hover:text-[#1A3626] transition-colors cursor-default hidden sm:flex`}>
-            <span className={`material-symbols-outlined text-[20px] ${textDarkGreen}`}>lock</span>
-            Transaksi Terenkripsi
-          </div>
-        </div>
+        )}
 
-        {/* Form Layout */}
         <form onSubmit={handleOrder} className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-          
-          {/* LEFT COLUMN (Forms) */}
+
+          {/* KIRI: jumlah + data pengiriman */}
           <div className="col-span-1 lg:col-span-8 flex flex-col gap-8">
-            
-            {/* 1. Informasi Pengiriman */}
-            <div className="bg-white rounded-[2rem] shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow duration-300 p-6 md:p-8">
-              <div className="flex items-center gap-4 mb-8">
-                <div className={`w-12 h-12 rounded-full ${bgGoldAccent} text-[#1A3626] font-black text-xl flex items-center justify-center shadow-inner`}>1</div>
-                <h2 className={`font-black text-2xl ${textDarkGreen} tracking-tight`}>Data Pengiriman</h2>
+
+            {/* 1. Jumlah */}
+            <div className="bg-white rounded-[2rem] shadow-sm border border-gray-100 p-6 md:p-8">
+              <div className="flex items-center gap-4 mb-6">
+                <div className="w-12 h-12 rounded-full bg-[#EAC775] text-[#1A3626] font-black text-xl flex items-center justify-center">1</div>
+                <h2 className="font-black text-2xl text-[#1A3626] tracking-tight">Jumlah botol</h2>
               </div>
-              
+
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+                <div>
+                  <p className="font-bold text-lg text-[#1A3626]">Patchmos Spray 50 mL</p>
+                  <p className="text-gray-500 text-sm mt-1">
+                    {produk ? `${rupiah(harga)} per botol` : gagalMuat ? "Harga belum tersedia" : "Memuat harga…"}
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-3" role="group" aria-label="Jumlah botol">
+                  <button
+                    type="button"
+                    onClick={() => ubahJumlah(quantity - 1)}
+                    disabled={!produk || quantity <= 1}
+                    aria-label="Kurangi jumlah"
+                    className="w-12 h-12 rounded-full border-2 border-[#1A3626] text-[#1A3626] text-2xl font-black flex items-center justify-center disabled:opacity-30 hover:bg-[#1A3626] hover:text-white transition-colors"
+                  >
+                    −
+                  </button>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min={1}
+                    max={maks}
+                    value={quantity}
+                    onChange={(e) => ubahJumlah(Number(e.target.value))}
+                    disabled={!produk}
+                    aria-label="Jumlah botol"
+                    className="w-20 h-12 text-center text-xl font-black text-[#1A3626] bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-[#1A3626] tabular-nums"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => ubahJumlah(quantity + 1)}
+                    disabled={!produk || quantity >= maks}
+                    aria-label="Tambah jumlah"
+                    className="w-12 h-12 rounded-full border-2 border-[#1A3626] text-[#1A3626] text-2xl font-black flex items-center justify-center disabled:opacity-30 hover:bg-[#1A3626] hover:text-white transition-colors"
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+              {produk && quantity >= maks && (
+                <p className="text-xs text-gray-500 mt-4">Maksimal {maks} botol per pesanan online. Untuk jumlah lebih besar, hubungi mosqrisk.official@gmail.com.</p>
+              )}
+            </div>
+
+            {/* 2. Data pengiriman */}
+            <div className="bg-white rounded-[2rem] shadow-sm border border-gray-100 p-6 md:p-8">
+              <div className="flex items-center gap-4 mb-8">
+                <div className="w-12 h-12 rounded-full bg-[#EAC775] text-[#1A3626] font-black text-xl flex items-center justify-center">2</div>
+                <h2 className="font-black text-2xl text-[#1A3626] tracking-tight">Data pengiriman</h2>
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                 <div>
-                  <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-3 ml-1">Nama Lengkap</label>
-                  <input type="text" required value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="Ketik nama penerima" className={`w-full bg-gray-50 border border-gray-200 rounded-2xl px-5 py-4 text-sm font-medium focus:outline-none focus:border-[#1A3626] focus:ring-4 focus:ring-[#1A3626]/10 transition-all text-gray-800 placeholder-gray-400`} />
+                  <label htmlFor="nama" className={labelClass}>Nama lengkap</label>
+                  <input id="nama" type="text" required minLength={2} maxLength={80} autoComplete="name" value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="Nama penerima" className={inputClass} />
                 </div>
                 <div>
-                  <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-3 ml-1">Nomor WhatsApp</label>
-                  <input type="tel" required value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} placeholder="Contoh: 081234567890" className={`w-full bg-gray-50 border border-gray-200 rounded-2xl px-5 py-4 text-sm font-medium focus:outline-none focus:border-[#1A3626] focus:ring-4 focus:ring-[#1A3626]/10 transition-all text-gray-800 placeholder-gray-400`} />
+                  <label htmlFor="hp" className={labelClass}>Nomor HP / WhatsApp</label>
+                  <input id="hp" type="tel" required inputMode="tel" autoComplete="tel" pattern="\+?[0-9][0-9 \-]{6,18}" title="Hanya angka, minimal 8 digit" value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} placeholder="Contoh: 081234567890" className={inputClass} />
                 </div>
               </div>
               <div>
-                <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-3 ml-1">Alamat Lengkap</label>
-                <div className="relative">
-                  <textarea required value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Nama Jalan, RT/RW, Kelurahan, Kecamatan, Kota, Provinsi, Kode Pos. Patokan rumah." rows={3} className={`w-full bg-gray-50 border border-gray-200 rounded-2xl px-5 py-4 text-sm font-medium focus:outline-none focus:border-[#1A3626] focus:ring-4 focus:ring-[#1A3626]/10 transition-all resize-none text-gray-800 placeholder-gray-400`}></textarea>
-                  {isLoadingAddress && <div className="absolute top-4 right-4 text-xs font-bold text-[#EAC775] animate-pulse bg-white/80 px-2 py-1 rounded">Mencari Lokasi Anda...</div>}
+                <div className="flex items-end justify-between gap-3 mb-3">
+                  <label htmlFor="alamat" className={`${labelClass} mb-0`}>Alamat lengkap</label>
+                  <button type="button" onClick={isiAlamatDariLokasi} disabled={isLoadingAddress} className="text-sm font-bold text-[#1A3626] underline underline-offset-4 min-h-[44px] px-1 disabled:opacity-50">
+                    {isLoadingAddress ? "Mencari lokasi…" : "Isi dari lokasi saya"}
+                  </button>
                 </div>
+                <textarea id="alamat" required minLength={10} maxLength={400} autoComplete="street-address" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Nama jalan, nomor rumah, kelurahan, kecamatan, kota, kode pos, patokan." rows={3} className={`${inputClass} resize-none`}></textarea>
               </div>
             </div>
-
-            {/* 2. Pilih Jumlah Pembelian */}
-            <div className="bg-white rounded-[2rem] shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow duration-300 p-6 md:p-8">
-              <div className="flex items-center gap-4 mb-8">
-                <div className={`w-12 h-12 rounded-full ${bgGoldAccent} text-[#1A3626] font-black text-xl flex items-center justify-center shadow-inner`}>2</div>
-                <h2 className={`font-black text-2xl ${textDarkGreen} tracking-tight`}>Pilih Jumlah Botol</h2>
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                {/* Option 1 */}
-                <div 
-                  onClick={() => setQuantity(1)}
-                  className={`cursor-pointer rounded-2xl border-2 p-5 flex flex-col relative transition-all duration-300 transform hover:-translate-y-1 ${quantity === 1 ? `border-[#1A3626] ${darkGreen} text-white shadow-lg` : 'border-gray-100 bg-white hover:border-gray-300 text-gray-800'}`}
-                >
-                  {/* Background Bottle Image Container */}
-                  <div className="absolute inset-0 overflow-hidden rounded-[14px] pointer-events-none">
-                    <div className={`absolute right-[-20%] bottom-[-25%] w-32 h-32 pointer-events-none transition-all duration-500 ease-in-out mix-blend-screen ${quantity === 1 ? 'opacity-20 scale-100 translate-x-0' : 'opacity-0 scale-90 translate-x-4'}`}>
-                      <Image src="/spray-square-white.png" alt="" width={150} height={150} className="w-full h-full object-contain filter drop-shadow-md" />
-                    </div>
-                  </div>
-
-                  <div className="flex justify-between items-start mb-6 relative z-10">
-                    <span className={`font-black text-lg`}>1 Botol</span>
-                    <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${quantity === 1 ? 'border-[#EAC775] bg-[#EAC775]' : 'border-gray-300'}`}>
-                      {quantity === 1 && <span className="material-symbols-outlined text-[#1A3626] text-sm font-bold">check</span>}
-                    </div>
-                  </div>
-                  <p className={`font-black text-xl mt-auto relative z-10 ${quantity === 1 ? goldAccent : textDarkGreen}`}>Rp 35.000</p>
-                </div>
-                
-                {/* Option 2 */}
-                <div 
-                  onClick={() => setQuantity(2)}
-                  className={`cursor-pointer rounded-2xl border-2 p-5 flex flex-col relative transition-all duration-300 transform hover:-translate-y-1 ${quantity === 2 ? `border-[#1A3626] ${darkGreen} text-white shadow-lg` : 'border-gray-100 bg-white hover:border-gray-300 text-gray-800'}`}
-                >
-                  {/* Background Bottle Image Container */}
-                  <div className="absolute inset-0 overflow-hidden rounded-[14px] pointer-events-none">
-                    <div className={`absolute right-[-20%] bottom-[-25%] w-32 h-32 pointer-events-none transition-all duration-500 ease-in-out mix-blend-screen ${quantity === 2 ? 'opacity-20 scale-100 translate-x-0' : 'opacity-0 scale-90 translate-x-4'}`}>
-                      <Image src="/spray-square-white.png" alt="" width={150} height={150} className="w-full h-full object-contain filter drop-shadow-md" />
-                    </div>
-                  </div>
-
-                  <div className="absolute -top-3 right-4 bg-gradient-to-r from-[#F59E0B] to-[#D97706] text-white text-[10px] font-black px-3 py-1 rounded-full shadow-md z-20">LEBIH HEMAT</div>
-                  <div className="flex justify-between items-start mb-6 relative z-10">
-                    <span className={`font-black text-lg`}>2 Botol</span>
-                    <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${quantity === 2 ? 'border-[#EAC775] bg-[#EAC775]' : 'border-gray-300'}`}>
-                      {quantity === 2 && <span className="material-symbols-outlined text-[#1A3626] text-sm font-bold">check</span>}
-                    </div>
-                  </div>
-                  <p className={`text-xs font-bold line-through mb-1 relative z-10 ${quantity === 2 ? 'text-gray-400' : 'text-gray-400'}`}>Rp 70.000</p>
-                  <p className={`font-black text-xl mt-auto relative z-10 ${quantity === 2 ? goldAccent : textDarkGreen}`}>Rp 65.000</p>
-                </div>
-
-                {/* Option 3 */}
-                <div 
-                  onClick={() => setQuantity(3)}
-                  className={`cursor-pointer rounded-2xl border-2 p-5 flex flex-col relative transition-all duration-300 transform hover:-translate-y-1 ${quantity === 3 ? `border-[#1A3626] ${darkGreen} text-white shadow-lg` : 'border-gray-100 bg-white hover:border-gray-300 text-gray-800'}`}
-                >
-                  {/* Background Bottle Image Container */}
-                  <div className="absolute inset-0 overflow-hidden rounded-[14px] pointer-events-none">
-                    <div className={`absolute right-[-20%] bottom-[-25%] w-32 h-32 pointer-events-none transition-all duration-500 ease-in-out mix-blend-screen ${quantity === 3 ? 'opacity-20 scale-100 translate-x-0' : 'opacity-0 scale-90 translate-x-4'}`}>
-                      <Image src="/spray-square-white.png" alt="" width={150} height={150} className="w-full h-full object-contain filter drop-shadow-md" />
-                    </div>
-                  </div>
-
-                  <div className="absolute -top-3 right-4 bg-gradient-to-r from-red-500 to-rose-600 text-white text-[10px] font-black px-3 py-1 rounded-full shadow-md animate-pulse z-20 whitespace-nowrap">PAKET KELUARGA</div>
-                  <div className="flex justify-between items-start mb-6 relative z-10">
-                    <span className={`font-black text-lg`}>3 Botol</span>
-                    <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${quantity === 3 ? 'border-[#EAC775] bg-[#EAC775]' : 'border-gray-300'}`}>
-                      {quantity === 3 && <span className="material-symbols-outlined text-[#1A3626] text-sm font-bold">check</span>}
-                    </div>
-                  </div>
-                  <p className={`text-xs font-bold line-through mb-1 relative z-10 ${quantity === 3 ? 'text-gray-400' : 'text-gray-400'}`}>Rp 105.000</p>
-                  <p className={`font-black text-xl mt-auto relative z-10 ${quantity === 3 ? goldAccent : textDarkGreen}`}>Rp 90.000</p>
-                </div>
-              </div>
-            </div>
-
-            {/* 3. Pilih Pembayaran */}
-            <div className="bg-white rounded-[2rem] shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow duration-300 p-6 md:p-8">
-              <div className="flex items-center gap-4 mb-8">
-                <div className={`w-12 h-12 rounded-full ${bgGoldAccent} text-[#1A3626] font-black text-xl flex items-center justify-center shadow-inner`}>3</div>
-                <h2 className={`font-black text-2xl ${textDarkGreen} tracking-tight`}>Metode Pembayaran</h2>
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                
-                {/* Method QRIS */}
-                <div 
-                  onClick={() => setPaymentMethod("QRIS")}
-                  className={`cursor-pointer rounded-2xl border-2 p-5 flex items-center justify-between transition-all duration-300 relative overflow-hidden group ${paymentMethod === "QRIS" ? `border-[#1A3626] bg-gray-50 shadow-sm` : 'border-gray-100 bg-white hover:border-gray-300'}`}
-                >
-                  <div className={`absolute top-4 -right-8 w-36 text-center ${bgGoldAccent} text-[#1A3626] text-[9px] font-black py-1 transform rotate-45 shadow-sm`}>BEBAS BIAYA</div>
-                  <div className="flex items-center gap-4">
-                    <div className="w-14 h-10 bg-white border border-gray-200 rounded-lg flex items-center justify-center p-1 shadow-sm">
-                      <span className="font-extrabold text-red-500 text-sm tracking-tighter">QRIS</span>
-                    </div>
-                    <div>
-                      <h3 className={`font-black text-sm ${paymentMethod === "QRIS" ? textDarkGreen : 'text-gray-800'}`}>QRIS (Semua Payment)</h3>
-                      <p className="text-xs text-green-600 font-bold mt-1">Gratis biaya admin</p>
-                    </div>
-                  </div>
-                  <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center mr-6 transition-colors ${paymentMethod === "QRIS" ? 'border-[#1A3626] bg-[#1A3626]' : 'border-gray-300'}`}>
-                    {paymentMethod === "QRIS" && <span className="material-symbols-outlined text-white text-sm font-bold">check</span>}
-                  </div>
-                </div>
-
-                {/* Method E-Wallet */}
-                <div 
-                  onClick={() => setPaymentMethod("E-WALLET")}
-                  className={`cursor-pointer rounded-2xl border-2 p-5 flex items-center justify-between transition-all duration-300 group ${paymentMethod === "E-WALLET" ? `border-[#1A3626] bg-gray-50 shadow-sm` : 'border-gray-100 bg-white hover:border-gray-300'}`}
-                >
-                  <div className="flex items-center gap-4">
-                    <div className="flex -space-x-2 group-hover:scale-105 transition-transform">
-                      <div className="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center text-white text-[9px] font-bold border-2 border-white z-30 shadow-sm">DANA</div>
-                      <div className="w-10 h-10 rounded-full bg-green-500 flex items-center justify-center text-white text-[9px] font-bold border-2 border-white z-20 shadow-sm">GoPay</div>
-                    </div>
-                    <div>
-                      <h3 className={`font-black text-sm ${paymentMethod === "E-WALLET" ? textDarkGreen : 'text-gray-800'}`}>Dompet Digital</h3>
-                      <p className="text-xs text-gray-500 font-bold mt-1">Biaya admin Rp 1.000</p>
-                    </div>
-                  </div>
-                  <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${paymentMethod === "E-WALLET" ? 'border-[#1A3626] bg-[#1A3626]' : 'border-gray-300'}`}>
-                    {paymentMethod === "E-WALLET" && <span className="material-symbols-outlined text-white text-sm font-bold">check</span>}
-                  </div>
-                </div>
-
-              </div>
-            </div>
-
           </div>
 
-          {/* RIGHT COLUMN (Summary) */}
-          <div className="col-span-1 lg:col-span-4 lg:sticky lg:top-24">
-            <div className="flex flex-col gap-6">
-              
-              {/* Review Card */}
-              <div className="bg-white rounded-[1.5rem] p-6 shadow-sm border border-gray-100 flex flex-col items-center md:items-start text-center md:text-left hover:shadow-md transition-shadow">
-                <p className="text-[10px] font-black text-gray-400 mb-3 uppercase tracking-widest">Ulasan dan Rating</p>
-                <div className="flex items-end justify-center md:justify-start gap-3 mb-1 w-full">
-                  <span className={`text-5xl font-black ${textDarkGreen} leading-none`}>4.99</span>
-                  <div className="flex gap-1 pb-1">
-                    {[1,2,3,4,5].map(i => (
-                      <span key={i} className="material-symbols-outlined text-xl text-[#F59E0B]" style={{fontVariationSettings: "'FILL' 1" }}>star</span>
-                    ))}
+          {/* KANAN: ringkasan */}
+          <div className="col-span-1 lg:col-span-4 lg:sticky lg:top-28">
+            <div className="bg-[#1A3626] rounded-[2rem] p-6 md:p-8 shadow-xl text-white">
+              <h3 className="font-black mb-6 text-[#EAC775] uppercase tracking-widest text-[13px]">
+                Ringkasan pesanan
+              </h3>
+
+              <div className="space-y-4 mb-6">
+                <div className="flex justify-between items-start gap-4">
+                  <div>
+                    <p className="text-sm font-bold">Patchmos Spray 50 mL <span className="text-[#EAC775]">×{quantity}</span></p>
+                    <p className="text-[12px] text-white/70 mt-1">{produk ? `${rupiah(harga)} per botol` : "—"}</p>
                   </div>
+                  <p className="text-sm font-black tabular-nums">{produk ? rupiah(totalPrice) : "—"}</p>
                 </div>
-                <p className="text-xs text-gray-500 font-medium mt-2">Berdasarkan 2.4k+ rating pembeli setia</p>
+                <p className="text-[12px] text-white/70 leading-relaxed">
+                  Metode pembayaran (QRIS, e-wallet, transfer bank, dll.) dipilih di jendela Midtrans, sesuai yang tersedia.
+                </p>
               </div>
 
-              {/* Order Summary Card - EXACTLY LIKE MOSQRISK CARD (Image 2) */}
-              <div className={`${darkGreen} rounded-[2.5rem] p-6 md:p-8 shadow-xl relative overflow-hidden text-white border border-[#2c523d]`}>
-                {/* Decorative background spray silhouette from Image 2 */}
-                <div className="absolute right-[-20%] bottom-[-20%] opacity-20 w-64 h-64 pointer-events-none mix-blend-screen">
-                   <Image 
-                      src="/spray-square-white.png"
-                      alt="Spray Silhouette" 
-                      width={300}
-                      height={300}
-                      className="w-full h-full object-contain" 
-                    />
-                </div>
-                
-                <h3 className={`font-black text-lg mb-6 flex items-center gap-2 ${goldAccent} uppercase tracking-widest text-[13px]`}>
-                  <span className="material-symbols-outlined text-[18px]">receipt_long</span>
-                  Ringkasan Pesanan
-                </h3>
-                
-                <div className="space-y-4 mb-6 relative z-10">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <p className="text-sm font-bold">Patchmos Spray <span className={goldAccent}>x{quantity}</span></p>
-                      <p className="text-[11px] text-gray-300 mt-1 font-medium">Ekstrak Ampas Nilam</p>
-                    </div>
-                    <p className="text-sm font-black">Rp {totalPrice.toLocaleString('id-ID')}</p>
-                  </div>
-                  
-                  <div className="flex justify-between items-center">
-                    <p className="text-xs text-gray-300 font-medium">Pembayaran</p>
-                    <p className="text-xs font-bold bg-black/20 px-3 py-1 rounded-full">{paymentMethod}</p>
-                  </div>
-
-                  <div className="flex justify-between items-center">
-                    <p className="text-xs text-gray-300 font-medium">Biaya Admin</p>
-                    <p className="text-xs font-bold">{paymentMethod === "QRIS" ? "Gratis" : "Rp 1.000"}</p>
-                  </div>
-                </div>
-                
-                <div className="pt-6 border-t border-white/20 border-dashed flex justify-between items-center mb-8 relative z-10">
-                  <p className="font-bold text-gray-300 text-sm">Total Tagihan</p>
-                  <p className={`font-black text-3xl ${goldAccent}`}>Rp {(totalPrice + (paymentMethod === "QRIS" ? 0 : 1000)).toLocaleString('id-ID')}</p>
-                </div>
-
-                {/* White button exactly like Image 2 */}
-                <button type="submit" className="w-full bg-white text-[#1A3626] font-black text-lg py-4 rounded-[2rem] transition-all duration-300 shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-95 flex justify-center items-center gap-3 relative z-10">
-                  <span className="material-symbols-outlined text-[#1A3626]">shopping_cart</span>
-                  Beli Patchmos Spray
-                </button>
+              <div className="pt-6 border-t border-white/20 flex justify-between items-center mb-8">
+                <p className="font-bold text-white/80 text-sm">Total</p>
+                <p className="font-black text-3xl text-[#EAC775] tabular-nums">{produk ? rupiah(totalPrice) : "—"}</p>
               </div>
 
+              <button
+                type="submit"
+                disabled={!produk || memproses}
+                className="w-full bg-white text-[#1A3626] font-black text-lg py-4 rounded-[2rem] transition-colors hover:bg-[#EAC775] disabled:opacity-60 disabled:cursor-not-allowed min-h-[52px]"
+              >
+                {memproses ? "Memproses…" : produk ? `Bayar ${rupiah(totalPrice)}` : "Memuat…"}
+              </button>
+
+              <p className="text-[12px] text-white/70 mt-5 leading-relaxed">
+                Nama, nomor HP, dan alamat dipakai untuk memproses & mengirim pesanan. Lihat{" "}
+                <Link href="/privasi" className="underline underline-offset-2 text-white">Kebijakan Privasi</Link>.
+              </p>
             </div>
           </div>
-          
         </form>
       </div>
 
-      {/* QRIS Modal */}
-      {isQrisModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4 transition-all animate-in fade-in duration-300">
-          <div className="bg-white max-w-md w-full rounded-[2.5rem] p-6 md:p-8 text-center shadow-2xl border border-gray-100 overflow-y-auto max-h-[90vh]">
-            <h2 className={`text-2xl font-black ${textDarkGreen} mb-2 tracking-tight`}>Scan QRIS</h2>
-            <p className="text-gray-500 mb-6 text-sm font-medium">
-              Gunakan aplikasi m-Banking atau E-Wallet pilihan Anda untuk melakukan pembayaran.
-            </p>
-            
-            <div className="bg-gray-50 rounded-[2rem] p-4 mb-6 border-2 border-dashed border-gray-200 flex justify-center">
-              <Image src="/qris-payment.png" alt="QRIS MosqRisk" width={300} height={300} className="w-full max-w-[280px] rounded-xl shadow-sm" />
-            </div>
-            
-            <div className="flex flex-col gap-3">
-              <button onClick={handlePaymentVerification} className={`w-full ${bgGoldAccent} ${textDarkGreen} font-black py-4 rounded-2xl hover:brightness-105 transition-all shadow-lg`}>
-                Saya Sudah Bayar
-              </button>
-              <button onClick={() => setIsQrisModalOpen(false)} className={`w-full bg-gray-100 text-gray-500 font-bold py-3 rounded-2xl hover:bg-gray-200 transition-colors text-sm`}>
-                Batal
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Success Modal */}
-      {isSuccessModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-900/40 backdrop-blur-md p-4 transition-all animate-in fade-in duration-300">
-          <div className="bg-white max-w-sm w-full rounded-[2.5rem] p-8 md:p-10 text-center shadow-2xl border border-gray-100">
-            <div className={`w-24 h-24 ${darkGreen} rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg transform scale-110 animate-bounce-slow`}>
-              <span className={`material-symbols-outlined text-5xl ${goldAccent} font-bold`} style={{fontVariationSettings: "'FILL' 1"}}>check</span>
-            </div>
-            <h2 className={`text-2xl font-black ${textDarkGreen} mb-3 tracking-tight`}>Transaksi Sukses!</h2>
-            <p className="text-gray-500 mb-8 text-sm leading-relaxed font-medium">
-              Pembayaran Anda berhasil diverifikasi. Akun Anda kini berstatus Premium!
-            </p>
-            <button onClick={() => setIsSuccessModalOpen(false)} className={`inline-block w-full bg-gray-100 ${textDarkGreen} font-black py-4 rounded-2xl hover:bg-gray-200 transition-colors`}>
+      {/* Hasil pembayaran */}
+      {hasil && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-900/50 p-4" role="dialog" aria-modal="true" aria-labelledby="judul-hasil">
+          <div className="bg-white max-w-sm w-full rounded-[2rem] p-8 text-center shadow-2xl">
+            <h2 id="judul-hasil" className="text-2xl font-black text-[#1A3626] mb-3 tracking-tight">{pesanHasil[hasil].judul}</h2>
+            <p className="text-gray-600 mb-4 text-sm leading-relaxed">{pesanHasil[hasil].isi}</p>
+            {modeUjiCoba && hasil === "dibayar" && (
+              <p className="text-[#5C4A12] bg-[#FFF7E0] rounded-xl p-3 mb-4 text-xs leading-relaxed">Mode uji coba: tidak ada uang yang ditarik dan pesanan ini tidak dikirim.</p>
+            )}
+            {orderId && <p className="text-xs text-gray-500 mb-6">Nomor pesanan: <span className="font-mono font-bold">{orderId}</span></p>}
+            <button onClick={() => setHasil(null)} className="w-full bg-[#1A3626] text-white font-black py-4 rounded-2xl hover:bg-[#0c1f13] transition-colors min-h-[48px]">
               Tutup
             </button>
           </div>
         </div>
       )}
-
     </div>
   );
 }

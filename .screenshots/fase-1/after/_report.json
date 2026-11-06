@@ -1,0 +1,118 @@
+[
+  {
+    "page": "/",
+    "width": 1440,
+    "height": 3389,
+    "overflowX": 0,
+    "errors": []
+  },
+  {
+    "page": "/pantau",
+    "width": 1440,
+    "height": 1446,
+    "overflowX": 0,
+    "errors": []
+  },
+  {
+    "page": "/edukasi",
+    "width": 1440,
+    "height": 7374,
+    "overflowX": 0,
+    "errors": []
+  },
+  {
+    "page": "/claim",
+    "width": 1440,
+    "height": 900,
+    "overflowX": 0,
+    "errors": []
+  },
+  {
+    "page": "/checkout",
+    "width": 1440,
+    "height": 1162,
+    "overflowX": 0,
+    "errors": [
+      "console: Refused to execute inline script because it violates the following Content Security Policy directive: \"script-src 'self' https://snap-assets.sandbox.midtrans.com https://api.sandbox.midtrans.com https"
+    ]
+  },
+  {
+    "page": "/lapor",
+    "width": 1440,
+    "height": 1350,
+    "overflowX": 0,
+    "errors": []
+  },
+  {
+    "page": "/privasi",
+    "width": 1440,
+    "height": 2783,
+    "overflowX": 0,
+    "errors": []
+  },
+  {
+    "page": "/admin",
+    "width": 1440,
+    "height": 900,
+    "overflowX": 0,
+    "errors": []
+  },
+  {
+    "page": "/",
+    "width": 390,
+    "height": 5073,
+    "overflowX": 0,
+    "errors": []
+  },
+  {
+    "page": "/pantau",
+    "width": 390,
+    "height": 2802,
+    "overflowX": 0,
+    "errors": []
+  },
+  {
+    "page": "/edukasi",
+    "width": 390,
+    "height": 13138,
+    "overflowX": 0,
+    "errors": []
+  },
+  {
+    "page": "/claim",
+    "width": 390,
+    "height": 908,
+    "overflowX": 0,
+    "errors": []
+  },
+  {
+    "page": "/checkout",
+    "width": 390,
+    "height": 1877,
+    "overflowX": 0,
+    "errors": [
+      "console: Refused to execute inline script because it violates the following Content Security Policy directive: \"script-src 'self' https://snap-assets.sandbox.midtrans.com https://api.sandbox.midtrans.com https"
+    ]
+  },
+  {
+    "page": "/lapor",
+    "width": 390,
+    "height": 2590,
+    "overflowX": 0,
+    "errors": []
+  },
+  {
+    "page": "/privasi",
+    "width": 390,
+    "height": 4307,
+    "overflowX": 0,
+    "errors": []
+  },
+  {
+    "page": "/admin",
+    "width": 390,
+    "height": 908,
+    "overflowX": 0,
+    "errors": []
+  }
+]

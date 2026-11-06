@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Plus_Jakarta_Sans } from "next/font/google";
 import { Toaster } from "react-hot-toast";
-import Script from "next/script";
 import BottomNav from "@/components/BottomNav";
 import "./globals.css";
 
@@ -23,7 +22,7 @@ const plusJakartaSans = Plus_Jakarta_Sans({
 
 export const metadata: Metadata = {
   title: "MosqRisk - Peringatan Dini DBD",
-  description: "Aplikasi peringatan dini risiko Demam Berdarah Dengue (DBD) berbasis cuaca BMKG dan AI.",
+  description: "Pantau risiko nyamuk DBD di wilayahmu dari prakiraan cuaca BMKG, dan kenali Patchmos, spray bio-repellent dari ampas nilam Aceh.",
 };
 
 export default function RootLayout({
@@ -46,7 +45,7 @@ export default function RootLayout({
         <meta name="mobile-web-app-capable" content="yes" />
         {/* eslint-disable-next-line @next/next/no-page-custom-font */}
         <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
-        <Script src="https://app.sandbox.midtrans.com/snap/snap.js" data-client-key={process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY} strategy="lazyOnload" />
+        {/* Midtrans Snap kini dimuat hanya di /checkout (URL sandbox/produksi dari GET /api/produk). */}
       </head>
       <body className={`${plusJakartaSans.className} min-h-full flex flex-col pb-16 md:pb-0`}>
         {children}

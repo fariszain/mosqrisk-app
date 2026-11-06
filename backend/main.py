@@ -1,16 +1,23 @@
 # Ingat untuk menginstal dependensi sebelum menjalankan file ini:
 # pip install fastapi uvicorn requests
 
-from fastapi import FastAPI, Query, BackgroundTasks, Depends, HTTPException, status
+from fastapi import FastAPI, Query, BackgroundTasks, Depends, HTTPException, Request, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 import requests
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
+import hashlib
+import hmac
 import os
-from pydantic import BaseModel
+import re
+import uuid
+from typing import Literal, Optional
+from pydantic import BaseModel, Field
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.utils import formataddr
 from dotenv import load_dotenv
 from supabase import create_client, Client
 import midtransclient
@@ -27,11 +34,26 @@ if not supabase_url or not supabase_key:
 supabase: Client = create_client(supabase_url or "", supabase_key or "")
 
 # Setup Midtrans Client
+MIDTRANS_IS_PRODUCTION = os.environ.get('MIDTRANS_IS_PRODUCTION', 'false').lower() == 'true'
+SNAP_JS_URL = (
+    "https://app.midtrans.com/snap/snap.js" if MIDTRANS_IS_PRODUCTION
+    else "https://app.sandbox.midtrans.com/snap/snap.js"
+)
 snap = midtransclient.Snap(
-    is_production=os.environ.get('MIDTRANS_IS_PRODUCTION', 'false').lower() == 'true',
+    is_production=MIDTRANS_IS_PRODUCTION,
     server_key=os.environ.get('MIDTRANS_SERVER_KEY'),
     client_key=os.environ.get('MIDTRANS_CLIENT_KEY')
 )
+
+# ─── PRODUK & HARGA ───
+# TODO: harga SEMENTARA Rp20.000/botol (keputusan tim 2026-11-06); harga final diputuskan
+# minggu berikutnya — konfirmasi ke tim sebelum expo.
+# Ini SATU-SATUNYA sumber harga: frontend membacanya lewat GET /api/produk, dan total
+# pembayaran selalu dihitung di server (jumlah × harga), tidak pernah diambil dari browser.
+HARGA_PER_BOTOL = 20000
+MAKS_BOTOL_PER_PESANAN = 20
+NAMA_PRODUK = "Patchmos Spray 50 mL"
+SITE_URL = os.environ.get("SITE_URL", "https://mosqrisk-app.vercel.app").rstrip("/")
 
 app = FastAPI(title="MosqRisk Backend API")
 
@@ -48,34 +70,53 @@ app.add_middleware(
 # Tabel reports dan subscribers harus dibuat di Supabase Dashboard (SQL Editor)
 
 class Report(BaseModel):
-    locationName: str
-    reportType: str
-    description: str
+    locationName: str = Field(min_length=2, max_length=300)
+    reportType: Literal["JENTIK", "DBD", "LAINNYA"]
+    description: str = Field(min_length=3, max_length=1000)
 
 class Subscriber(BaseModel):
-    locationName: str
-    email: str
+    locationName: str = Field(min_length=2, max_length=120)
+    email: str = Field(max_length=254, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 class ClaimRequest(BaseModel):
-    code: str
-
-class CheckoutRequest(BaseModel):
-    name: str
-    phone: str
-    package: str
-    paymentMethod: str
+    code: str = Field(min_length=4, max_length=40)
 
 class PaymentRequest(BaseModel):
-    name: str
-    phone: str
-    package: str
-    amount: int
+    name: str = Field(min_length=2, max_length=80)
+    phone: str = Field(min_length=8, max_length=20, pattern=r"^\+?[0-9][0-9 \-]{6,18}$")
+    address: str = Field(min_length=10, max_length=400)
+    quantity: int = Field(ge=1, le=MAKS_BOTOL_PER_PESANAN)
+    # Total yang dilihat pembeli di layar. Kalau berbeda dengan hitungan server
+    # (mis. harga baru saja diganti), transaksi ditolak supaya pembeli tidak kaget.
+    expectedTotal: Optional[int] = None
+
+class PaymentStatusRequest(BaseModel):
+    orderId: str = Field(pattern=r"^MOSQ-\d{14}-[0-9a-f]{8}$")
+
+class OfflineSaleRequest(BaseModel):
+    quantity: int = Field(ge=1, le=500)
+    paymentMethod: Literal["tunai", "qris", "transfer", "lainnya"]
+    customerName: Optional[str] = Field(default=None, max_length=80)
+    notes: Optional[str] = Field(default=None, max_length=300)
+    soldAt: Optional[date] = None
+
+STATUS_PESANAN = ("menunggu_pembayaran", "dibayar", "dikirim", "selesai", "batal", "gagal")
+
+class OrderStatusUpdate(BaseModel):
+    status: Literal["menunggu_pembayaran", "dibayar", "dikirim", "selesai", "batal", "gagal"]
 
 security = HTTPBearer()
 
 def verify_admin(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    admin_key = os.getenv("ADMIN_KEY", "kemenkes123")
-    if credentials.credentials != admin_key:
+    # Fail closed: tanpa ADMIN_KEY di environment, SEMUA akses admin ditolak.
+    # (Dulu ada nilai default yang tertulis di kode — siapa pun bisa masuk kalau env kosong.)
+    admin_key = os.getenv("ADMIN_KEY", "").strip()
+    if not admin_key:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Akses admin belum dikonfigurasi (ADMIN_KEY kosong).",
+        )
+    if not hmac.compare_digest(credentials.credentials.encode(), admin_key.encode()):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid authentication credentials",
@@ -393,43 +434,108 @@ async def get_climate_trend(lat: float = Query(...), lon: float = Query(...)):
         print(f"Error Open-Meteo: {e}")
         return {"success": False, "error": str(e)}
 
+# --- EMAIL HELPERS ---
+FOOTER_EMAIL = (
+    "\n\nSalam,\nTim MosqRisk / Patchmos — Universitas Syiah Kuala\n{site}\n\n"
+    "Kamu menerima email ini karena mendaftar notifikasi MosqRisk untuk wilayah {loc}. "
+    "Untuk berhenti, balas email ini dengan kata BERHENTI."
+)
+
+LABEL_LAPORAN = {
+    "JENTIK": "temuan jentik/sarang nyamuk",
+    "DBD": "dugaan kasus DBD",
+    "LAINNYA": "laporan lain",
+}
+
+def buat_email(gmail_user, to_addr, subject, body):
+    msg = MIMEMultipart()
+    msg['From'] = formataddr(("MosqRisk", gmail_user))
+    msg['To'] = to_addr
+    msg['Subject'] = subject
+    msg.attach(MIMEText(body, 'plain', 'utf-8'))
+    return msg
+
 # --- LOCAL BROADCAST LOGIC ---
+LOC_PREFIXES = ['kabupaten ', 'kota ', 'provinsi ', 'kecamatan ', 'kelurahan ', 'desa ']
+
+def clean_loc(loc_str):
+    loc_str = (loc_str or "").lower()
+    for p in LOC_PREFIXES:
+        loc_str = loc_str.replace(p, '')
+    return re.sub(r"\s+", " ", loc_str).strip()
+
+def _ada_frasa(teks, frasa):
+    return re.search(r"(?<!\w)" + re.escape(frasa) + r"(?!\w)", teks) is not None
+
+def lokasi_cocok(lokasi_laporan, lokasi_pelanggan):
+    """True kalau laporan berada di wilayah langganan pelanggan.
+
+    Dicocokkan per frasa utuh (bukan potongan huruf), dan teks lokasi laporan yang
+    terlalu pendek tidak dipakai untuk mencocokkan — supaya laporan berlokasi "a"
+    tidak terkirim ke semua pelanggan.
+    """
+    c_rep = clean_loc(lokasi_laporan)
+    c_sub = clean_loc(lokasi_pelanggan)
+    if not c_rep or not c_sub:
+        return False
+    if c_sub == 'umum':
+        return True
+    if len(c_sub) >= 3 and _ada_frasa(c_rep, c_sub):
+        return True
+    return len(c_rep) >= 4 and _ada_frasa(c_sub, c_rep)
+
+# Laporan asli terjadi di satu tempat. Kalau teks lokasinya cocok ke lebih dari ini
+# wilayah langganan sekaligus (mis. "Medan Banda Aceh Aceh Utara ..."), laporan tetap
+# disimpan tetapi TIDAK di-email-kan — mencegah endpoint publik dipakai untuk spam.
+MAKS_WILAYAH_PER_LAPORAN = 2
+URL_RE = re.compile(r"(https?://|www\.)\S+", re.IGNORECASE)
+
+def tanpa_tautan(teks):
+    """Hapus tautan dari teks buatan warga sebelum diteruskan lewat email resmi."""
+    return URL_RE.sub("[tautan dihapus]", teks or "")
+
+def pilih_penerima(lokasi_laporan, pelanggan):
+    """Return (penerima [(email, lokasi)], mencurigakan: bool)."""
+    target = [(e, l) for e, l in pelanggan if lokasi_cocok(lokasi_laporan, l)]
+    wilayah = {clean_loc(l) for _, l in target if clean_loc(l) != 'umum'}
+    return target, len(wilayah) > MAKS_WILAYAH_PER_LAPORAN
+
 def send_local_broadcast(report: Report):
     try:
         response = supabase.table("subscribers").select("email, location_name").execute()
         subscribers = [(row['email'], row['location_name']) for row in response.data]
-        
-        prefixes = ['kabupaten ', 'kota ', 'provinsi ', 'kecamatan ', 'kelurahan ', 'desa ']
-        def clean_loc(loc_str):
-            loc_str = loc_str.lower()
-            for p in prefixes:
-                loc_str = loc_str.replace(p, '')
-            return loc_str.strip()
 
-        target_emails = []
-        for sub_email, sub_loc in subscribers:
-            c_rep = clean_loc(report.locationName)
-            c_sub = clean_loc(sub_loc)
-            if c_sub == 'umum' or c_sub in c_rep or c_rep in c_sub:
-                target_emails.append((sub_email, sub_loc))
-                
+        target_emails, mencurigakan = pilih_penerima(report.locationName, subscribers)
+        if mencurigakan:
+            print("Lokasi laporan cocok ke terlalu banyak wilayah — email tidak dikirim (laporan tetap tersimpan).")
+            return
+
         if target_emails:
             gmail_user = os.getenv("GMAIL_USER", "mosqrisk.official@gmail.com")
             gmail_password = os.getenv("GMAIL_PASSWORD")
+            if not gmail_password:
+                print("GMAIL_PASSWORD kosong — email laporan warga tidak dikirim.")
+                return
             server = smtplib.SMTP('smtp.gmail.com', 587)
             server.starttls()
             server.login(gmail_user, gmail_password)
-            
+
+            label = LABEL_LAPORAN.get(report.reportType, "laporan")
             for email_addr, loc in target_emails:
-                msg = MIMEMultipart()
-                msg['From'] = gmail_user
-                msg['To'] = email_addr
-                msg['Subject'] = f"🚨 INFO WARGA: Laporan {report.reportType} di area Anda!"
-                
-                body = f"Halo warga {loc},\n\nSistem MosqRisk baru saja menerima laporan terkait '{report.reportType}' di sekitar area Anda.\nTitik Temuan: {report.locationName}\n\nDetail laporan:\n\"{report.description}\"\n\nHarap tingkatkan kewaspadaan, pastikan tidak ada genangan air di sekitar rumah, dan selalu gunakan Patchmos Spray untuk perlindungan maksimal keluarga Anda."
-                msg.attach(MIMEText(body, 'plain'))
+                subject = f"Info warga MosqRisk: {label} di sekitar {loc}"
+                body = (
+                    f"Halo,\n\nMosqRisk menerima {label} dari warga di sekitar wilayahmu.\n"
+                    f"Lokasi yang ditulis pelapor: {tanpa_tautan(report.locationName)}\n\n"
+                    f"Isi laporan:\n\"{tanpa_tautan(report.description)}\"\n\n"
+                    "Catatan: laporan ini dikirim oleh warga dan belum diverifikasi tim MosqRisk.\n\n"
+                    "Langkah yang bisa dilakukan: periksa dan kuras tempat penampungan air, tutup wadah air, "
+                    "dan singkirkan barang bekas yang dapat menampung air (3M Plus). "
+                    f"Cek skor risiko wilayahmu: {SITE_URL}/pantau"
+                    + FOOTER_EMAIL.format(site=SITE_URL, loc=loc)
+                )
+                msg = buat_email(gmail_user, email_addr, subject, body)
                 server.sendmail(gmail_user, email_addr, msg.as_string())
-                
+
             server.quit()
     except Exception as email_err:
         print(f"Error sending local broadcast: {email_err}")
@@ -439,16 +545,17 @@ async def submit_report(report: Report, background_tasks: BackgroundTasks):
     try:
         # Insert to Supabase
         supabase.table("reports").insert({
-            "location_name": report.locationName,
+            "location_name": report.locationName.strip(),
             "report_type": report.reportType,
-            "description": report.description
+            "description": report.description.strip()
         }).execute()
-        
+
         background_tasks.add_task(send_local_broadcast, report)
 
         return {"success": True, "message": "Laporan berhasil disimpan"}
     except Exception as e:
-        return {"success": False, "message": str(e)}
+        print(f"Gagal menyimpan laporan: {e}")
+        return {"success": False, "message": "Laporan gagal disimpan. Coba lagi nanti."}
 
 @app.get("/api/reports")
 async def get_reports(token: str = Depends(verify_admin)):
@@ -468,34 +575,43 @@ async def delete_report(id: str, token: str = Depends(verify_admin)):
 
 @app.get("/api/stats")
 async def get_stats():
+    """Jumlah laporan warga & pelanggan email — angka asli dari database.
+
+    (Versi lama mengembalikan "impact_kg" hasil rumus karangan
+    2,5 kg + 0,5 kg/laporan + 1,2 kg/pelanggan; sudah dihapus karena tidak berbasis data.)
+    """
     try:
-        reports_res = supabase.table("reports").select("*", count="exact").execute()
+        reports_res = supabase.table("reports").select("id", count="exact").limit(1).execute()
         total_reports = reports_res.count if reports_res.count is not None else 0
-        
-        subs_res = supabase.table("subscribers").select("*", count="exact").execute()
+
+        subs_res = supabase.table("subscribers").select("id", count="exact").limit(1).execute()
         total_subs = subs_res.count if subs_res.count is not None else 0
-        
-        # Calculate impact dynamically: base 2.5kg + 0.5kg per report + 1.2kg per subscriber
-        impact_kg = 2.5 + (total_reports * 0.5) + (total_subs * 1.2)
-        
-        return {"success": True, "impact_kg": round(impact_kg, 1)}
+
+        return {"success": True, "total_reports": total_reports, "total_subscribers": total_subs}
     except Exception as e:
-        return {"success": False, "impact_kg": 2.5}
+        print(f"Gagal menghitung statistik: {e}")
+        return {"success": False}
 
 def send_welcome_email(sub: Subscriber):
     try:
         gmail_user = os.getenv("GMAIL_USER", "mosqrisk.official@gmail.com")
         gmail_password = os.getenv("GMAIL_PASSWORD")
         if gmail_user == "MASUKKAN_EMAIL_DISINI": return
-        
-        msg = MIMEMultipart()
-        msg['From'] = gmail_user
-        msg['To'] = sub.email
-        msg['Subject'] = "Pendaftaran Berhasil - MosqRisk"
-        
-        body = f"Selamat datang di MosqRisk! Email Anda terdaftar untuk memantau risiko nyamuk di {sub.locationName}.\n\nJika tingkat risiko berubah menjadi tinggi, kami akan segera mengabari Anda."
-        msg.attach(MIMEText(body, 'plain'))
-        
+        if not gmail_password:
+            print("GMAIL_PASSWORD kosong — email sambutan tidak dikirim.")
+            return
+
+        body = (
+            f"Halo,\n\nNotifikasi email MosqRisk untuk wilayah {sub.locationName} sudah aktif.\n\n"
+            "Kamu akan menerima email saat:\n"
+            "- ada laporan warga (jentik, dugaan kasus DBD, dll.) di wilayah ini, atau\n"
+            "- tim MosqRisk mengirim peringatan kewaspadaan.\n\n"
+            f"Skor risiko terbaru bisa dicek kapan saja di {SITE_URL}/pantau. "
+            "Skor dihitung dari prakiraan cuaca BMKG (suhu, kelembapan, curah hujan)."
+            + FOOTER_EMAIL.format(site=SITE_URL, loc=sub.locationName)
+        )
+        msg = buat_email(gmail_user, sub.email, "Notifikasi MosqRisk aktif", body)
+
         server = smtplib.SMTP('smtp.gmail.com', 587)
         server.starttls()
         server.login(gmail_user, gmail_password)
@@ -515,18 +631,19 @@ async def subscribe_wa(sub: Subscriber, background_tasks: BackgroundTasks):
                 "location_name": sub.locationName
             }).eq("email", sub.email).execute()
             return {"success": True, "message": f"Lokasi pantauan untuk email Anda berhasil diperbarui menjadi {sub.locationName}."}
-        
+
         # Insert into DB
         supabase.table("subscribers").insert({
             "location_name": sub.locationName,
             "email": sub.email
         }).execute()
-        
+
         background_tasks.add_task(send_welcome_email, sub)
-        
-        return {"success": True, "message": "Email berhasil didaftarkan. Anda akan menerima peringatan jika risiko tinggi."}
+
+        return {"success": True, "message": "Email terdaftar. Kamu akan menerima email saat ada laporan warga di wilayah ini atau saat tim MosqRisk mengirim peringatan."}
     except Exception as e:
-        return {"success": False, "message": f"Gagal mendaftarkan Email: {str(e)}"}
+        print(f"Gagal mendaftarkan email: {e}")
+        return {"success": False, "message": "Gagal mendaftarkan email. Coba lagi nanti."}
 
 @app.get("/api/subscribe")
 async def get_subscribers(token: str = Depends(verify_admin)):
@@ -549,20 +666,32 @@ def send_broadcast_emails(rows):
         gmail_user = os.getenv("GMAIL_USER", "mosqrisk.official@gmail.com")
         gmail_password = os.getenv("GMAIL_PASSWORD")
         if gmail_user == "MASUKKAN_EMAIL_DISINI": return
-        
+        if not gmail_password:
+            print("GMAIL_PASSWORD kosong — broadcast tidak dikirim.")
+            return
+
         server = smtplib.SMTP('smtp.gmail.com', 587)
         server.starttls()
         server.login(gmail_user, gmail_password)
-        
+
         for target_email, loc_name in rows:
             try:
-                msg = MIMEMultipart()
-                msg['From'] = gmail_user
-                msg['To'] = target_email
-                msg['Subject'] = "🚨 PERINGATAN DINI KEMENKES 🚨"
-                
-                body = f"Halo warga {loc_name},\n\nSistem MosqRisk mendeteksi bahwa Tingkat Risiko Nyamuk/DBD di daerah Anda saat ini sedang TINGGI.\n\nHarap segera lakukan tindakan pencegahan 3M Plus:\n1. Menguras tempat penampungan air\n2. Menutup tempat penampungan air\n3. Mendaur ulang barang bekas\n\nTetap waspada dan jaga kesehatan keluarga Anda!"
-                msg.attach(MIMEText(body, 'plain'))
+                # Broadcast dikirim ke SEMUA pelanggan (belum ditarget per tingkat risiko),
+                # jadi isinya tidak boleh mengklaim risiko wilayah penerima sedang tinggi.
+                body = (
+                    "Halo,\n\nTim MosqRisk mengirim peringatan kewaspadaan DBD kepada semua pelanggan notifikasi.\n"
+                    f"Cek skor risiko terbaru untuk wilayahmu ({loc_name}) di {SITE_URL}/pantau — "
+                    "skor dihitung dari prakiraan cuaca BMKG.\n\n"
+                    "Langkah pencegahan 3M Plus:\n"
+                    "1. Menguras tempat penampungan air\n"
+                    "2. Menutup tempat penampungan air\n"
+                    "3. Mendaur ulang barang bekas yang dapat menampung air\n"
+                    "Plus: cegah gigitan nyamuk, misalnya dengan kelambu atau pakaian tertutup.\n\n"
+                    "Jika ada anggota keluarga yang demam tinggi mendadak, segera periksakan ke puskesmas "
+                    "atau fasilitas kesehatan terdekat."
+                    + FOOTER_EMAIL.format(site=SITE_URL, loc=loc_name)
+                )
+                msg = buat_email(gmail_user, target_email, "Peringatan kewaspadaan DBD dari tim MosqRisk", body)
                 server.sendmail(gmail_user, target_email, msg.as_string())
             except Exception as e:
                 print(f"Failed to send to {target_email}: {e}")
@@ -602,50 +731,309 @@ async def claim_premium(req: ClaimRequest):
         code_row = result.data[0]
         if code_row.get("is_used"):
             return {"success": False, "message": "Maaf, kode ini sudah pernah diklaim sebelumnya."}
-        
-        # Mark as used
-        supabase.table("premium_codes").update({"is_used": True}).eq("code", code_upper).execute()
-        
-        return {"success": True, "message": "Berhasil! Akun Anda kini berstatus Premium."}
-    except Exception as e:
-        return {"success": False, "message": str(e)}
 
-@app.post("/api/checkout/verify")
-def verify_checkout(req: CheckoutRequest):
-    # Mock server-side payment verification
-    return {"success": True, "message": "Pembayaran berhasil diverifikasi", "isPremium": True}
+        # Mark as used — atomik: hanya berhasil kalau kode masih belum terpakai,
+        # jadi dua klaim bersamaan tidak bisa sama-sama sukses.
+        updated = supabase.table("premium_codes").update({"is_used": True}).eq("code", code_upper).eq("is_used", False).execute()
+        if not updated.data:
+            return {"success": False, "message": "Maaf, kode ini sudah pernah diklaim sebelumnya."}
+
+        return {"success": True, "message": "Berhasil! Akses Premium aktif di perangkat ini."}
+    except Exception as e:
+        print(f"Gagal memproses klaim kode: {e}")
+        return {"success": False, "message": "Klaim gagal diproses. Coba lagi nanti."}
+
+# ═══════════════════════════════════════════════════════════════════
+# PRODUK, PESANAN & PEMBAYARAN
+# Satu tabel `orders` untuk penjualan online (checkout web + Midtrans) dan offline
+# (dicatat admin). Status pembayaran online SELALU diambil dari API Midtrans di
+# server — callback di browser hanya memicu pengecekan, tidak dipercaya mentah-mentah.
+# ═══════════════════════════════════════════════════════════════════
+
+# Status yang masih boleh diperbarui otomatis dari Midtrans. Setelah admin menandai
+# "dikirim"/"selesai", sinkronisasi pembayaran tidak menimpa status itu lagi
+# (kecuali menambah catatan bila ada refund).
+STATUS_FASE_BAYAR = ("menunggu_pembayaran", "gagal")
+STATUS_REFUND = ("refund", "partial_refund", "chargeback", "partial_chargeback")
+# Token Snap berlaku 24 jam (default Midtrans). Pesanan tanpa transaksi setelah itu = batal.
+BATAS_TOKEN_SNAP = timedelta(hours=24)
+ORDER_ID_RE = re.compile(r"^MOSQ-\d{14}-[0-9a-f]{8}$")
+
+def _now_iso():
+    return datetime.now(timezone.utc).isoformat()
+
+def _midtrans_404(err):
+    data = getattr(err, "api_response_dict", None) or {}
+    return str(data.get("status_code")) == "404" or "404" in str(err)
+
+def _lebih_tua_dari(waktu_iso, batas):
+    try:
+        dibuat = datetime.fromisoformat(str(waktu_iso).replace("Z", "+00:00"))
+        if dibuat.tzinfo is None:
+            dibuat = dibuat.replace(tzinfo=timezone.utc)
+        return datetime.now(timezone.utc) - dibuat > batas
+    except (TypeError, ValueError):
+        return False
+
+def status_dari_midtrans(trx):
+    """Petakan transaction_status Midtrans ke status pesanan MosqRisk."""
+    ts = (trx or {}).get("transaction_status", "")
+    fraud = (trx or {}).get("fraud_status") or "accept"
+    if ts == "capture":
+        return "dibayar" if fraud == "accept" else "menunggu_pembayaran"
+    if ts == "settlement":
+        return "dibayar"
+    if ts in ("cancel", "expire", "refund", "partial_refund", "chargeback", "partial_chargeback"):
+        return "batal"
+    if ts in ("deny", "failure"):
+        return "gagal"
+    return "menunggu_pembayaran"  # pending, authorize, atau belum ada transaksi
+
+def sinkron_pesanan_midtrans(order_id):
+    """Cek status transaksi ke API Midtrans lalu perbarui baris `orders`.
+
+    Return: status pesanan terbaru, atau None kalau pesanan tidak ditemukan.
+    """
+    res = supabase.table("orders").select("id,status,total,created_at").eq("midtrans_order_id", order_id).limit(1).execute()
+    if not res.data:
+        return None
+    row = res.data[0]
+    sekarang = row["status"]
+    try:
+        trx = snap.transactions.status(order_id)
+    except Exception as e:
+        # 404 dari Midtrans = pembeli belum memilih metode bayar di Snap.
+        # Lewat masa berlaku token (24 jam) tanpa transaksi → pesanan dianggap batal.
+        if _midtrans_404(e) and sekarang == "menunggu_pembayaran" and _lebih_tua_dari(row.get("created_at"), BATAS_TOKEN_SNAP):
+            supabase.table("orders").update({
+                "status": "batal",
+                "notes": "Tidak ada transaksi di Midtrans setelah 24 jam (jendela pembayaran ditutup sebelum membayar).",
+                "updated_at": _now_iso(),
+            }).eq("id", row["id"]).execute()
+            return "batal"
+        print(f"Status Midtrans {order_id} belum tersedia: {e}")
+        return sekarang
+
+    try:
+        nominal_cocok = int(float(trx.get("gross_amount", row["total"]))) == int(row["total"])
+    except (TypeError, ValueError):
+        nominal_cocok = False
+    ts = trx.get("transaction_status")
+    status_mid = status_dari_midtrans(trx) if nominal_cocok else "gagal"
+
+    perubahan = {"midtrans_status": ts, "updated_at": _now_iso()}
+    catatan = []
+    if status_mid == "dibayar" and sekarang in ("menunggu_pembayaran", "gagal", "batal"):
+        # Uang sudah masuk: selalu dicatat dibayar, walau admin sempat menandai batal.
+        perubahan["status"] = "dibayar"
+        if sekarang == "batal":
+            catatan.append("Pembayaran masuk setelah pesanan ditandai batal — cek manual.")
+    elif sekarang in STATUS_FASE_BAYAR:
+        perubahan["status"] = status_mid
+    elif ts in STATUS_REFUND:
+        if sekarang == "dibayar":
+            perubahan["status"] = "batal"
+            catatan.append("Dana dikembalikan (refund/chargeback) di Midtrans.")
+        else:
+            catatan.append("Ada refund/chargeback di Midtrans — cek manual.")
+    if "status" in perubahan and trx.get("payment_type"):
+        perubahan["payment_method"] = trx["payment_type"]
+    if not nominal_cocok:
+        catatan.append("Nominal di Midtrans tidak sama dengan total pesanan — cek manual.")
+    if catatan:
+        perubahan["notes"] = " ".join(catatan)
+    supabase.table("orders").update(perubahan).eq("id", row["id"]).execute()
+    return perubahan.get("status", sekarang)
+
+@app.get("/api/produk")
+async def get_produk():
+    """Info produk + harga untuk frontend (satu sumber harga) dan konfigurasi Snap."""
+    return {
+        "success": True,
+        "nama": NAMA_PRODUK,
+        "harga_per_botol": HARGA_PER_BOTOL,
+        "maks_per_pesanan": MAKS_BOTOL_PER_PESANAN,
+        "pembayaran": {
+            "mode": "produksi" if MIDTRANS_IS_PRODUCTION else "uji_coba",
+            "snap_url": SNAP_JS_URL,
+            "client_key": os.environ.get("MIDTRANS_CLIENT_KEY", ""),
+        },
+    }
 
 @app.post("/api/payment/token")
 async def create_payment_token(req: PaymentRequest):
+    # Nominal dihitung di server — nilai dari browser tidak pernah dipakai untuk menagih.
+    total = req.quantity * HARGA_PER_BOTOL
+    if req.expectedTotal is not None and req.expectedTotal != total:
+        return JSONResponse(status_code=409, content={
+            "success": False,
+            "message": "Harga sudah diperbarui. Muat ulang halaman, lalu coba lagi.",
+        })
+
+    order_id = f"MOSQ-{datetime.now().strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:8]}"
+
+    # 1) Catat pesanan dulu. Kalau gagal dicatat, transaksi pembayaran tidak dibuat.
     try:
-        import uuid
-        order_id = f"MOSQ-{datetime.now().strftime('%Y%m%d%H%M%S')}-{str(uuid.uuid4())[:8]}"
-        
-        param = {
-            "transaction_details": {
-                "order_id": order_id,
-                "gross_amount": req.amount
-            },
-            "customer_details": {
-                "first_name": req.name,
-                "phone": req.phone
-            },
-            "item_details": [
-                {
-                    "id": f"PKG-{req.package}",
-                    "price": req.amount,
-                    "quantity": 1,
-                    "name": f"MosqRisk Premium - {req.package} Botol" if req.package != "QRIS" else "Akses Premium (Tanpa Kemasan)"
-                }
-            ]
-        }
-        
-        transaction = snap.create_transaction(param)
-        transaction_token = transaction['token']
-        
-        return {"success": True, "token": transaction_token, "order_id": order_id}
+        supabase.table("orders").insert({
+            "channel": "online",
+            "status": "menunggu_pembayaran",
+            "quantity": req.quantity,
+            "unit_price": HARGA_PER_BOTOL,
+            "total": total,
+            "customer_name": req.name.strip(),
+            "phone": req.phone.strip(),
+            "address": req.address.strip(),
+            "midtrans_order_id": order_id,
+            "is_test": not MIDTRANS_IS_PRODUCTION,
+        }).execute()
     except Exception as e:
-        return {"success": False, "message": str(e)}
+        print(f"Gagal mencatat pesanan {order_id}: {e}")
+        return JSONResponse(status_code=503, content={
+            "success": False,
+            "message": "Pencatatan pesanan sedang tidak tersedia. Coba lagi nanti.",
+        })
+
+    # 2) Buat transaksi Snap.
+    param = {
+        "transaction_details": {
+            "order_id": order_id,
+            "gross_amount": total
+        },
+        "customer_details": {
+            "first_name": req.name.strip(),
+            "phone": req.phone.strip()
+        },
+        "item_details": [
+            {
+                "id": "PATCHMOS-SPRAY",
+                "price": HARGA_PER_BOTOL,
+                "quantity": req.quantity,
+                "name": NAMA_PRODUK
+            }
+        ]
+    }
+    try:
+        transaction = snap.create_transaction(param)
+        return {"success": True, "token": transaction['token'], "order_id": order_id, "total": total}
+    except Exception as e:
+        print(f"Gagal membuat transaksi Midtrans {order_id}: {e}")
+        try:
+            supabase.table("orders").update({
+                "status": "gagal",
+                "notes": "Gagal membuat transaksi Midtrans",
+                "updated_at": _now_iso(),
+            }).eq("midtrans_order_id", order_id).execute()
+        except Exception as db_err:
+            print(f"Gagal menandai pesanan {order_id} sebagai gagal: {db_err}")
+        return JSONResponse(status_code=502, content={
+            "success": False,
+            "message": "Gagal membuat transaksi pembayaran. Coba lagi nanti.",
+        })
+
+@app.post("/api/payment/status")
+async def check_payment_status(req: PaymentStatusRequest):
+    """Dipanggil halaman checkout setelah popup Snap selesai. Status dicek ke Midtrans."""
+    try:
+        status_baru = sinkron_pesanan_midtrans(req.orderId)
+    except Exception as e:
+        print(f"Gagal mengecek status {req.orderId}: {e}")
+        return JSONResponse(status_code=503, content={"success": False, "message": "Status pembayaran belum bisa dicek."})
+    if status_baru is None:
+        return JSONResponse(status_code=404, content={"success": False, "message": "Pesanan tidak ditemukan."})
+    return {"success": True, "status": status_baru}
+
+@app.post("/api/payment/notification")
+async def midtrans_notification(request: Request):
+    """Notifikasi HTTP dari Midtrans.
+
+    Atur di Dashboard Midtrans → Settings → Payment → Notification URL:
+    https://<domain>/api/payment/notification
+    Tanda tangan diverifikasi, lalu status tetap dicek ulang langsung ke API Midtrans.
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse(status_code=400, content={"success": False})
+
+    order_id = str(body.get("order_id", ""))
+    signature_input = (
+        order_id + str(body.get("status_code", "")) + str(body.get("gross_amount", ""))
+        + os.environ.get("MIDTRANS_SERVER_KEY", "")
+    )
+    expected = hashlib.sha512(signature_input.encode()).hexdigest()
+    if not os.environ.get("MIDTRANS_SERVER_KEY") or not hmac.compare_digest(str(body.get("signature_key", "")), expected):
+        return JSONResponse(status_code=403, content={"success": False})
+
+    if not ORDER_ID_RE.match(order_id):
+        return {"success": True}  # bukan pesanan dari web ini — abaikan
+
+    try:
+        sinkron_pesanan_midtrans(order_id)
+    except Exception as e:
+        print(f"Gagal memproses notifikasi {order_id}: {e}")
+        return JSONResponse(status_code=500, content={"success": False})  # Midtrans akan mengirim ulang
+    return {"success": True}
+
+# --- ADMIN: PENJUALAN (online + offline) ---
+PESAN_TABEL_ORDERS = (
+    "Data penjualan belum bisa diakses: tabel orders belum dibuat (jalankan migration Fase 1 "
+    "di supabase/migrations) atau database Supabase tidak terjangkau."
+)
+
+@app.get("/api/admin/orders")
+async def admin_list_orders(token: str = Depends(verify_admin)):
+    try:
+        res = supabase.table("orders").select("*").order("created_at", desc=True).limit(1000).execute()
+        return {"success": True, "data": res.data, "harga_per_botol": HARGA_PER_BOTOL}
+    except Exception as e:
+        print(f"Gagal memuat pesanan: {e}")
+        return JSONResponse(status_code=503, content={"success": False, "message": PESAN_TABEL_ORDERS})
+
+@app.post("/api/admin/orders")
+async def admin_create_offline_sale(req: OfflineSaleRequest, token: str = Depends(verify_admin)):
+    """Catat penjualan offline (langsung/bazar/expo). Harga satuan = HARGA_PER_BOTOL."""
+    row = {
+        "channel": "offline",
+        "status": "selesai",
+        "quantity": req.quantity,
+        "unit_price": HARGA_PER_BOTOL,
+        "total": req.quantity * HARGA_PER_BOTOL,
+        "payment_method": req.paymentMethod,
+        "customer_name": (req.customerName or "").strip() or None,
+        "notes": (req.notes or "").strip() or None,
+        "sold_at": (req.soldAt or date.today()).isoformat(),
+        "is_test": False,
+    }
+    try:
+        res = supabase.table("orders").insert(row).execute()
+        return {"success": True, "data": res.data[0] if res.data else row}
+    except Exception as e:
+        print(f"Gagal mencatat penjualan offline: {e}")
+        return JSONResponse(status_code=503, content={"success": False, "message": PESAN_TABEL_ORDERS})
+
+@app.patch("/api/admin/orders/{order_id}")
+async def admin_update_order_status(order_id: int, req: OrderStatusUpdate, token: str = Depends(verify_admin)):
+    try:
+        res = supabase.table("orders").update({"status": req.status, "updated_at": _now_iso()}).eq("id", order_id).execute()
+        if not res.data:
+            return JSONResponse(status_code=404, content={"success": False, "message": "Pesanan tidak ditemukan."})
+        return {"success": True, "data": res.data[0]}
+    except Exception as e:
+        print(f"Gagal mengubah status pesanan {order_id}: {e}")
+        return JSONResponse(status_code=503, content={"success": False, "message": "Status gagal diubah."})
+
+@app.post("/api/admin/orders/{order_id}/sync")
+async def admin_sync_order(order_id: int, token: str = Depends(verify_admin)):
+    """Cek ulang status pembayaran pesanan online ke Midtrans."""
+    try:
+        res = supabase.table("orders").select("midtrans_order_id").eq("id", order_id).limit(1).execute()
+        if not res.data or not res.data[0].get("midtrans_order_id"):
+            return JSONResponse(status_code=404, content={"success": False, "message": "Bukan pesanan online."})
+        status_baru = sinkron_pesanan_midtrans(res.data[0]["midtrans_order_id"])
+        return {"success": True, "status": status_baru}
+    except Exception as e:
+        print(f"Gagal sinkron pesanan {order_id}: {e}")
+        return JSONResponse(status_code=503, content={"success": False, "message": "Gagal mengecek ke Midtrans."})
 
 if __name__ == "__main__":
     import uvicorn

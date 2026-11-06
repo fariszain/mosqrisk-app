@@ -50,17 +50,17 @@ export default function LandingPage() {
 
         <div className={`max-w-7xl mx-auto px-4 relative z-10 flex flex-col items-center text-center transition-all duration-1000 ease-out transform ${isMounted ? 'opacity-100 blur-0 translate-y-0 scale-100' : 'opacity-0 blur-md translate-y-8 scale-95'}`}>
           <h1 className="text-4xl md:text-6xl lg:text-7xl font-extrabold text-[#1A3626] mb-6 leading-tight max-w-5xl tracking-tight animate-in slide-in-from-bottom-6 fade-in duration-700 delay-100">
-            Inovasi Hijau dari Serambi Mekkah untuk <span className="text-[#EAC775] drop-shadow-sm">Keluarga Bebas Nyamuk</span>
+            Inovasi Hijau dari Serambi Mekkah: <span className="text-[#EAC775] drop-shadow-sm">Penolak Nyamuk dari Ampas Nilam</span>
           </h1>
           <p className="text-lg md:text-xl text-on-surface-variant max-w-3xl mb-12 leading-relaxed animate-in slide-in-from-bottom-8 fade-in duration-700 delay-200">
-            Patchmos mendaur ulang ampas nilam (patchouli) sisa penyulingan di Aceh menjadi pelindung kulit alami yang ampuh, aman, dan terintegrasi dengan <strong className="text-primary">Kecerdasan Buatan (AI) MosqRisk</strong>.
+            Patchmos memanfaatkan ampas nilam (patchouli) sisa penyulingan di Aceh menjadi spray bio-repellent dengan bahan aktif alami, tanpa DEET, dan terhubung dengan <strong className="text-primary">Model Risiko MosqRisk</strong> yang membaca prakiraan cuaca BMKG.
           </p>
           <div className="flex flex-col sm:flex-row items-center gap-4 animate-in slide-in-from-bottom-10 fade-in duration-700 delay-300">
             <Link href="/checkout" className="w-full sm:w-auto bg-[#1A3626] hover:bg-green-900 text-white font-bold py-4 px-10 rounded-full transition-all duration-300 shadow-xl hover:shadow-2xl hover:-translate-y-1 flex items-center justify-center gap-3 text-lg">
               <span className="material-symbols-outlined text-[#EAC775]">shopping_cart</span> Beli Patchmos
             </Link>
             <Link href="/pantau" className="w-full sm:w-auto bg-white border-2 border-[#1A3626] hover:bg-[#1A3626] hover:text-white text-[#1A3626] font-bold py-4 px-10 rounded-full transition-all duration-300 shadow-xl hover:shadow-2xl hover:-translate-y-1 flex items-center justify-center gap-3 text-lg group">
-              <span className="material-symbols-outlined">map</span> Coba Dasbor AI
+              <span className="material-symbols-outlined">map</span> Cek Risiko Wilayahmu
             </Link>
           </div>
         </div>
@@ -85,7 +85,7 @@ export default function LandingPage() {
               <>
                 <h2 className="text-3xl md:text-5xl font-extrabold mb-6 leading-tight">Anda Sudah Berstatus Premium!</h2>
                 <p className="text-white/80 text-lg mb-8 leading-relaxed max-w-lg">
-                  Terima kasih telah menggunakan Patchmos. Akun Anda sudah memiliki akses penuh ke fitur <strong>Peringatan Dini Cuaca BMKG H+3</strong>.
+                  Terima kasih telah menggunakan Patchmos. Perangkat ini sudah punya akses penuh ke <strong>prakiraan risiko 3 hari</strong> (dari data prakiraan cuaca BMKG) dan notifikasi email MosqRisk.
                 </p>
                 <Link href="/pantau" className="bg-[#EAC775] text-[#1A3626] hover:bg-yellow-400 font-extrabold py-4 px-8 rounded-full transition-all duration-300 shadow-[0_0_20px_rgba(234,199,117,0.3)] hover:-translate-y-1 flex items-center justify-center gap-3 text-lg w-full sm:w-auto w-fit">
                   Buka Dasbor Pantau
@@ -95,7 +95,7 @@ export default function LandingPage() {
               <>
                 <h2 className="text-3xl md:text-5xl font-extrabold mb-6 leading-tight">Sudah Punya Kemasan Patchmos?</h2>
                 <p className="text-white/80 text-lg mb-8 leading-relaxed max-w-lg">
-                  Setiap pembelian Patchmos dilengkapi dengan QR Code Premium di balik kemasan. Scan kodenya sekarang untuk membuka akses penuh ke <strong>Peringatan Dini Cuaca BMKG H+3</strong>.
+                  Setiap kemasan Patchmos dilengkapi kode QR Premium. Scan kodenya untuk membuka <strong>prakiraan risiko 3 hari</strong> (dari data prakiraan cuaca BMKG) dan notifikasi email MosqRisk.
                 </p>
                 <button 
                   onClick={() => setClaimModalOpen(true)}
@@ -104,7 +104,7 @@ export default function LandingPage() {
                   <span className="material-symbols-outlined text-2xl">qr_code_scanner</span>
                   Scan QR / Masukkan Kode
                 </button>
-                <p className="mt-4 text-white/50 text-sm">Belum punya kodenya? <Link href="/checkout" className="text-[#EAC775] hover:underline">Beli via QRIS di sini.</Link></p>
+                <p className="mt-4 text-white/70 text-sm">Belum punya kodenya? <Link href="/checkout" className="text-[#EAC775] hover:underline">Beli Patchmos di sini.</Link></p>
               </>
             )}
           </div>
@@ -127,10 +127,10 @@ export default function LandingPage() {
             {/* Left Content */}
             <div className="lg:col-span-5 text-left">
               <h2 className="text-4xl md:text-5xl font-extrabold text-[#1A3626] mb-6 leading-tight tracking-tight">
-                Perlindungan Maksimal, Berawal dari Kepedulian Alam
+                Berawal dari Ampas Nilam Aceh
               </h2>
               <p className="text-lg text-on-surface-variant leading-relaxed mb-8">
-                Patchmos tidak sekadar menolak nyamuk. Kami merumuskan tiga pilar utama untuk memberikan rasa aman penuh bagi keluarga Anda, sembari berkontribusi pada kelestarian lingkungan dan petani lokal.
+                Tiga hal yang membentuk Patchmos: bahan dari limbah penyulingan nilam, formula tanpa DEET, dan sistem pemantauan risiko berbasis data cuaca.
               </p>
               <div className="hidden lg:block w-24 h-1.5 bg-[#EAC775] rounded-full"></div>
             </div>
@@ -140,27 +140,27 @@ export default function LandingPage() {
               {/* Pilar 1 */}
               <div className="bg-[#f8fcf9] p-8 rounded-3xl hover:shadow-md transition-all duration-300 border border-green-100/50">
                 <div className="text-5xl font-black text-green-200 mb-4 tracking-tighter">01</div>
-                <h3 className="text-xl font-bold text-[#1A3626] mb-3">Misi Lingkungan (Zero Waste)</h3>
+                <h3 className="text-xl font-bold text-[#1A3626] mb-3">Memanfaatkan Ampas Nilam</h3>
                 <p className="text-on-surface-variant leading-relaxed text-[15px]">
-                  Berton-ton ampas nilam Aceh dibuang tiap tahun. Kami mengekstrak sisa minyak atsirinya, membantu mengurangi limbah pertanian dan menyejahterakan petani lokal.
+                  Penyulingan nilam hanya menghasilkan sekitar 1,5–3% minyak atsiri; lebih dari 95% sisanya limbah padat yang umumnya belum dimanfaatkan (Indriani dkk., 2025). Patchmos memakai ampas pascasuling ini sebagai sumber bahan aktif.
                 </p>
               </div>
               
               {/* Pilar 2 */}
               <div className="bg-[#fffdf8] p-8 rounded-3xl hover:shadow-md transition-all duration-300 border border-yellow-100/50">
                 <div className="text-5xl font-black text-[#EAC775]/40 mb-4 tracking-tighter">02</div>
-                <h3 className="text-xl font-bold text-[#1A3626] mb-3">100% Bebas DEET & Aman</h3>
+                <h3 className="text-xl font-bold text-[#1A3626] mb-3">Tanpa DEET</h3>
                 <p className="text-on-surface-variant leading-relaxed text-[15px]">
-                  Diformulasikan murni dari Patchouli Oil dan bahan nabati. Aman untuk kulit sensitif bayi, memberikan proteksi hingga 6 jam tanpa risiko iritasi bahan kimia.
+                  Bahan aktif diekstrak dari ampas nilam, lalu dimikroenkapsulasi dengan gelatin dan gum arab sebelum diformulasikan menjadi spray. Formula tidak memakai DEET.
                 </p>
               </div>
 
               {/* Pilar 3 */}
               <div className="bg-[#fcf8ff] p-8 rounded-3xl hover:shadow-md transition-all duration-300 border border-purple-100/50 sm:col-span-2">
                 <div className="text-5xl font-black text-purple-200 mb-4 tracking-tighter">03</div>
-                <h3 className="text-xl font-bold text-[#1A3626] mb-3">Terhubung AI MosqRisk</h3>
+                <h3 className="text-xl font-bold text-[#1A3626] mb-3">Terhubung dengan MosqRisk</h3>
                 <p className="text-on-surface-variant leading-relaxed text-[15px] sm:max-w-2xl">
-                  Satu-satunya penolak nyamuk yang dilengkapi Early Warning System. Memantau data cuaca BMKG dan memperingatkan Anda via Email/WhatsApp di waktu krusial untuk mengoleskan Patchmos pada kulit.
+                  Kode QR di kemasan membuka fitur premium MosqRisk. Model Risiko MosqRisk menghitung skor dari prakiraan cuaca BMKG (suhu, kelembapan, curah hujan) dengan parameter dari literatur ilmiah, dan notifikasi dikirim lewat email.
                 </p>
               </div>
             </div>
@@ -168,51 +168,33 @@ export default function LandingPage() {
         </RevealOnScroll>
       </section>
 
-      {/* Simulasi Testimoni & Review */}
+      {/* Hasil uji persepsi pengguna — data asli (05_FAKTA §4, Proposal UTU Awards 2026).
+          Menggantikan section "Simulasi Testimoni" (3 testimoni rekaan) — keputusan C1, 2026-11-06. */}
       <section className="py-20 bg-surface-container-lowest">
-        <RevealOnScroll className="max-w-7xl mx-auto px-4 text-center">
-          <h2 className="text-3xl md:text-4xl font-bold text-primary mb-12">Apa Kata Mereka?</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        <RevealOnScroll className="max-w-7xl mx-auto px-4">
+          <div className="max-w-3xl mb-12">
+            <p className="text-xs font-bold uppercase tracking-widest text-[#1A3626]/70 mb-3">Uji persepsi pengguna, bukan uji klinis</p>
+            <h2 className="text-3xl md:text-4xl font-bold text-primary mb-4">Hasil Uji Coba Pengguna</h2>
+            <p className="text-on-surface-variant text-lg leading-relaxed">
+              10 responden berusia 20–58 tahun memakai sampel Patchmos selama 5 hari dan memberi penilaian.
+            </p>
+          </div>
+          <dl className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8">
             {[
-              {
-                text: "Wanginya sangat menenangkan, tidak menyengat seperti obat nyamuk biasa. Anak saya yang biasanya alergi merah-merah kalau pakai lotion nyamuk kimia, sekarang aman pakai Patchmos.",
-                initials: "SI",
-                name: "Siti Rahma",
-                role: "Ibu Rumah Tangga, Banda Aceh",
-                hiddenClass: ""
-              },
-              {
-                text: "Konsepnya luar biasa. Membeli produk ini sama dengan mendukung petani lokal kita. Plus fitur notifikasi cuacanya bikin kita lebih aware kalau musim hujan dan banyak genangan air.",
-                initials: "BU",
-                name: "Budi Santoso",
-                role: "Pekerja Lapangan, Jakarta",
-                hiddenClass: ""
-              },
-              {
-                text: "Saya suka karena teksturnya tidak lengket sama sekali. Cepat meresap dan aroma khas nilamnya bikin rileks saat dipakai sebelum tidur malam.",
-                initials: "AN",
-                name: "Anita Dewi",
-                role: "Mahasiswi, Bandung",
-                hiddenClass: "hidden lg:block"
-              }
-            ].map((testimonial, i) => (
-              <div key={i} className={`bg-white p-8 rounded-3xl shadow-md border border-gray-100 text-left relative ${testimonial.hiddenClass}`}>
-                <div className="flex text-[#FFD700] mb-4">
-                  {[...Array(5)].map((_, idx) => (
-                    <span key={idx} className="material-symbols-outlined" style={{fontVariationSettings: "'FILL' 1" }}>star</span>
-                  ))}
-                </div>
-                <p className="text-on-surface-variant italic mb-6">&quot;{testimonial.text}&quot;</p>
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-gray-200 rounded-full flex items-center justify-center font-bold text-gray-500">{testimonial.initials}</div>
-                  <div>
-                    <h4 className="font-bold text-on-surface">{testimonial.name}</h4>
-                    <p className="text-xs text-on-surface-variant">{testimonial.role}</p>
-                  </div>
-                </div>
+              { label: "Kelayakan", nilai: "92,8%" },
+              { label: "Kepraktisan", nilai: "94,5%" },
+              { label: "Keefektifan menurut responden", nilai: "92,5%" },
+            ].map((item) => (
+              <div key={item.label} className="bg-white p-8 rounded-3xl border border-gray-100">
+                <dt className="text-sm font-bold text-on-surface-variant mb-2">{item.label}</dt>
+                <dd className="text-5xl font-extrabold text-[#1A3626] tabular-nums">{item.nilai}</dd>
               </div>
             ))}
-          </div>
+          </dl>
+          <p className="text-on-surface-variant text-[15px] leading-relaxed max-w-3xl">
+            Tidak ditemukan laporan iritasi kulit pada seluruh responden selama masa uji coba. Uji efikasi repellent (adaptasi <em>cage test</em> WHO) dan uji keamanan kulit (<em>patch test</em>) sedang direncanakan.
+          </p>
+          <p className="text-xs text-on-surface-variant mt-3">Sumber: uji persepsi tim Patchmos, Proposal UTU Awards 2026.</p>
         </RevealOnScroll>
       </section>
 

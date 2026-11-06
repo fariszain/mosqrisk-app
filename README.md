@@ -1,6 +1,8 @@
-# 🦟 MosqRisk — National Early Warning System for Dengue Fever
+# MosqRisk + Patchmos — Pemantauan Risiko Nyamuk DBD
 
-**MosqRisk** adalah platform **Sistem Kewaspadaan Dini Nasional** terintegrasi untuk mendeteksi, memantau, memetakan, dan memberikan peringatan dini terkait risiko penularan **Demam Berdarah Dengue (DBD)** di Indonesia. Platform ini bekerja secara sinergis dengan produk pencegah nyamuk **Patchmos Spray** — spray anti nyamuk 100% alami berbahan minyak nilam Aceh.
+**MosqRisk Analytics** adalah web untuk memantau risiko nyamuk penular **Demam Berdarah Dengue (DBD)** per kabupaten/kota. Skor risiko dihitung dengan formula berbobot (parameter dari literatur ilmiah) dari **prakiraan cuaca publik BMKG** — bukan model *machine learning* yang dilatih dari data kasus. MosqRisk terhubung dengan **Patchmos Spray**, spray bio-repellent dengan bahan aktif dari ampas nilam (limbah penyulingan) Aceh, lewat kode QR di kemasan.
+
+> Fakta, angka, dan klaim produk: lihat `docs/expo/05_FAKTA_TERVERIFIKASI.md`.
 
 🌐 **Live Demo**: [https://mosqrisk-app.vercel.app](https://mosqrisk-app.vercel.app)
 
@@ -9,31 +11,32 @@
 ## 🌟 Fitur Utama
 
 ### 1. Beranda (`/`)
-- Landing page premium dengan animasi scroll-reveal dan efek visual produk Patchmos Spray.
-- Menampilkan statistik real-time (jumlah laporan, subscriber, dan dampak lingkungan) yang diambil langsung dari database.
+- Landing page produk Patchmos Spray dan MosqRisk.
 - Akses cepat ke fitur klaim kode premium via modal Scan QR / Input Kode.
-- Testimoni pengguna dan CTA (Call-to-Action) menuju halaman pembelian.
+- Ringkasan hasil uji persepsi pengguna (10 responden, diberi label "uji persepsi, bukan uji klinis") dan CTA menuju halaman pembelian.
+- Beranda tidak menampilkan statistik database. Endpoint `/api/stats` mengembalikan jumlah laporan & pelanggan (angka asli) bila nanti ingin ditampilkan.
 
 ### 2. Peta Pantauan (`/pantau`)
 - **Auto-Detect GPS**: Secara otomatis mendeteksi lokasi pengguna via Geolocation API + Reverse Geocoding (Nominatim OSM).
 - **Pemilihan Manual**: Fallback dropdown Provinsi → Kabupaten/Kota menggunakan API Wilayah Indonesia (Emsifa).
-- **Skor Risiko Dinamis**: Perhitungan indeks risiko DBD berbasis data cuaca BMKG (suhu, kelembapan, curah hujan) dikombinasikan dengan volume laporan warga.
+- **Skor Risiko (Model Risiko MosqRisk)**: formula berbobot dari prakiraan cuaca BMKG — suhu (40%), curah hujan harian (35%), kelembapan (25%). Laporan warga **tidak** memengaruhi skor.
 - **Fitur Premium** (blur-lock untuk non-premium):
-  - Grafik Tren 7 Hari (Recharts) — visualisasi suhu, kelembapan, curah hujan.
-  - Geospatial Alert Radius — estimasi jangkauan risiko berdasarkan kepadatan laporan.
-- **Autentikasi Google OAuth** (via Supabase Auth) untuk aktivasi fitur darurat berlangganan peringatan email.
+  - Prakiraan risiko 3 hari (hari ini + 2 hari) dari data BMKG (Recharts).
+  - Notifikasi email untuk wilayah yang dipilih.
+- **Autentikasi Google OAuth** (via Supabase Auth) untuk berlangganan notifikasi email (dikirim saat ada laporan warga di wilayah itu atau saat admin mengirim peringatan).
 - Rekomendasi tindakan kesehatan masyarakat berdasarkan tingkat risiko.
 
 ### 3. Lapor Warga (`/lapor`)
 - Sistem urun daya (*crowdsourcing*) untuk melaporkan temuan sarang jentik atau kasus DBD.
 - Auto-detect lokasi pelapor via GPS dan reverse geocoding.
 - Pilihan jenis laporan: Sarang Jentik, Kasus DBD, atau Lainnya.
-- Laporan otomatis dikirim ke Supabase dan memicu email notifikasi ke subscriber terdekat.
+- Laporan disimpan ke Supabase dan diteruskan lewat email ke pelanggan notifikasi di wilayah yang sama. Nama/kontak pelapor tidak diminta.
 
 ### 4. Checkout & Pembayaran (`/checkout`)
-- Toko digital dengan pilihan paket: 1 Botol (Rp35.000), 2 Botol (Rp65.000), Paket Keluarga 3 Botol (Rp90.000).
-- Integrasi pembayaran **Midtrans Snap** (QRIS, GoPay, OVO, Bank Transfer, dll).
-- Ringkasan pesanan visual lengkap dengan rincian biaya admin.
+- Harga **Rp20.000/botol (SEMENTARA)**, satu konstanta `HARGA_PER_BOTOL` di `backend/main.py`; frontend membacanya lewat `GET /api/produk`. Tanpa paket bundling: total = jumlah × harga (stepper 1–20 botol).
+- Total dihitung di server; pesanan (nama, HP, alamat, jumlah) dicatat ke tabel `orders` sebelum transaksi **Midtrans Snap** dibuat.
+- Status pembayaran dicek server ke API Midtrans (`/api/payment/status`) dan lewat notifikasi Midtrans (`/api/payment/notification`).
+- Selama `MIDTRANS_IS_PRODUCTION=false`, halaman menampilkan label **mode uji coba** (sandbox, tidak ada uang ditarik).
 
 ### 5. Klaim Premium (`/claim`)
 - Halaman verifikasi kode unik premium dari kemasan fisik Patchmos Spray.
@@ -43,14 +46,18 @@
 ### 6. Modal Klaim (Beranda)
 - **Scan QR Code** dari kemasan produk menggunakan kamera perangkat (library jsQR).
 - **Input Manual** kode premium (format: `MOSQ-XXXX`).
-- **Beli Akses Digital** langsung via QRIS.
+- Status Premium disimpan di `localStorage` browser (keterbatasan yang diketahui — belum divalidasi server).
 
 ### 7. Dashboard Admin (`/admin`)
-- Login admin dengan sistem PIN/Bearer Token.
+- Login admin dengan PIN/Bearer Token (`ADMIN_KEY` wajib diisi; kalau kosong semua akses admin ditolak).
+- **Penjualan**: ringkasan botol terjual & pendapatan, daftar pesanan online + offline, ubah status (dibayar/dikirim/selesai/batal), cek status ke Midtrans, dan **form catat penjualan offline**.
 - Tabel data laporan masuk dan daftar subscriber email.
 - Fitur hapus data palsu/spam dari laporan.
-- **Export CSV** untuk analisis epidemiologi.
-- **Broadcast Email Alert** darurat massal ke seluruh subscriber terdaftar.
+- **Export CSV** (laporan, pelanggan, penjualan).
+- **Broadcast email** peringatan kewaspadaan ke seluruh subscriber (belum ditarget per tingkat risiko wilayah).
+
+### 8. Kebijakan Privasi (`/privasi`)
+- Data apa yang dikumpulkan, untuk apa, layanan pihak ketiga, cara berhenti berlangganan & meminta penghapusan data.
 
 ---
 
@@ -78,11 +85,9 @@
 | **SMTP (Gmail)** | Email notifikasi & broadcast alert |
 | **BMKG Public API** | Data prakiraan cuaca harian |
 
-### Design System
-- **Warna Primer**: `#1A3626` (Hijau Gelap / Deep Forest Green)
-- **Warna Aksen**: `#EAC775` (Emas / Gold Accent)
-- **Font**: Plus Jakarta Sans (Google Fonts)
-- **Style**: Glassmorphism, rounded corners (`rounded-2xl`), gradient overlays
+### Design System (sedang dirombak)
+- **Jangkar merek**: `#1A3626` (hijau hutan) dan `#EAC775` (emas), dari logo & kemasan.
+- Arahan desain: `docs/expo/02_DESIGN_BRIEF.md` (gaya lama — glassmorphism, gradient overlay, blob buram — dicabut).
 
 ---
 
@@ -104,7 +109,8 @@ mosqrisk-app/
 │   │   ├── checkout/page.tsx    # Halaman pembelian + Midtrans Snap
 │   │   ├── claim/page.tsx       # Verifikasi kode premium
 │   │   ├── admin/page.tsx       # Dashboard admin
-│   │   ├── layout.tsx           # Root layout (font, metadata, Midtrans script)
+│   │   ├── privasi/page.tsx     # Kebijakan Privasi
+│   │   ├── layout.tsx           # Root layout (font, metadata)
 │   │   ├── template.tsx         # Page transition wrapper (Framer Motion)
 │   │   └── globals.css          # Global styles & Tailwind config
 │   │
@@ -112,7 +118,8 @@ mosqrisk-app/
 │   │   ├── Navbar.tsx           # Navigasi atas (desktop)
 │   │   ├── BottomNav.tsx        # Navigasi bawah (mobile)
 │   │   ├── Footer.tsx           # Footer global
-│   │   ├── ClaimModal.tsx       # Modal scan QR / input kode / beli akses
+│   │   ├── ClaimModal.tsx       # Modal scan QR / input kode
+│   │   ├── admin/SalesPanel.tsx # Panel penjualan online + offline di /admin
 │   │   ├── RevealOnScroll.tsx   # Intersection Observer scroll animation
 │   │   └── SlidingAuthCard.tsx  # Komponen auth card (login/signup)
 │   │
@@ -126,7 +133,10 @@ mosqrisk-app/
 │   │
 │   └── next.config.ts           # Konfigurasi Next.js + PWA + API rewrites
 │
-├── supabase_setup.sql           # Skema tabel (reports, subscribers, premium_codes)
+├── supabase_setup.sql           # Skema awal premium_codes (policy anon-nya dicabut oleh migration Fase 1)
+├── supabase/
+│   ├── migrations/              # Migration SQL (dijalankan manual di SQL Editor Supabase)
+│   └── audit_rls.sql            # Kueri baca-saja untuk mengecek RLS & hak akses
 ├── vercel.json                  # Konfigurasi deployment Vercel
 ├── AGENTS.md                    # Panduan untuk AI Agent
 ├── CLAUDE.md                    # Pointer ke AGENTS.md
@@ -140,7 +150,8 @@ mosqrisk-app/
 | Method | Endpoint | Auth | Deskripsi |
 |--------|----------|------|-----------|
 | `GET` | `/api/mosqrisk?adm4=XX` | — | Ambil data cuaca BMKG & hitung skor risiko DBD |
-| `GET` | `/api/stats` | — | Statistik total laporan, subscriber, dampak lingkungan |
+| `GET` | `/api/climate-trend?lat=&lon=` | — | Tren skor risiko 12 bulan dari data cuaca historis Open-Meteo |
+| `GET` | `/api/stats` | — | Jumlah laporan & subscriber (angka asli dari database) |
 | `POST` | `/api/reports` | — | Kirim laporan jentik/DBD baru + trigger email notifikasi |
 | `GET` | `/api/reports` | 🔒 Admin | Ambil semua laporan (butuh Bearer token) |
 | `DELETE` | `/api/reports/{id}` | 🔒 Admin | Hapus laporan berdasarkan ID |
@@ -149,9 +160,15 @@ mosqrisk-app/
 | `DELETE` | `/api/subscribe/{id}` | 🔒 Admin | Hapus subscriber berdasarkan ID |
 | `POST` | `/api/admin/verify` | 🔒 Admin | Verifikasi PIN admin |
 | `POST` | `/api/broadcast` | 🔒 Admin | Kirim email peringatan massal ke semua subscriber |
-| `POST` | `/api/claim` | — | Validasi & gunakan kode premium kemasan |
-| `POST` | `/api/payment/token` | — | Generate Midtrans Snap token untuk pembayaran |
-| `POST` | `/api/checkout/verify` | — | Verifikasi status pembayaran checkout |
+| `POST` | `/api/claim` | — | Validasi & gunakan kode premium kemasan (atomik: satu kode hanya sekali) |
+| `GET` | `/api/produk` | — | Harga per botol, batas jumlah, mode pembayaran (sandbox/produksi) & URL Snap |
+| `POST` | `/api/payment/token` | — | Catat pesanan online + buat token Snap; total dihitung server (jumlah × harga) |
+| `POST` | `/api/payment/status` | — | Cek status pembayaran pesanan ke API Midtrans |
+| `POST` | `/api/payment/notification` | Tanda tangan Midtrans | Webhook notifikasi pembayaran Midtrans |
+| `GET` | `/api/admin/orders` | 🔒 Admin | Daftar pesanan online + offline |
+| `POST` | `/api/admin/orders` | 🔒 Admin | Catat penjualan offline |
+| `PATCH` | `/api/admin/orders/{id}` | 🔒 Admin | Ubah status pesanan |
+| `POST` | `/api/admin/orders/{id}/sync` | 🔒 Admin | Cek ulang status pembayaran ke Midtrans |
 
 ---
 
@@ -167,8 +184,9 @@ NEXT_PUBLIC_MIDTRANS_CLIENT_KEY=SB-Mid-client-xxxxx
 ### Backend (`backend/.env`)
 ```env
 SUPABASE_URL=https://xxxxx.supabase.co
-SUPABASE_KEY=eyJhbGci...  # Service Role Key (bypass RLS)
-ADMIN_KEY=your_secure_admin_pin
+SUPABASE_KEY=eyJhbGci...  # WAJIB Service Role Key (bypass RLS) — anon key tidak akan bisa mengakses tabel
+ADMIN_KEY=your_secure_admin_pin  # WAJIB; kalau kosong, semua akses admin ditolak
+SITE_URL=https://mosqrisk-app.vercel.app  # opsional, untuk tautan di email
 GMAIL_USER=mosqrisk.official@gmail.com
 GMAIL_PASSWORD=xxxx xxxx xxxx xxxx  # Gmail App Password (16 digit)
 MIDTRANS_SERVER_KEY=SB-Mid-server-xxxxx
@@ -214,15 +232,18 @@ MosqRisk mendukung instalasi sebagai PWA di perangkat mobile dan desktop:
 
 | Tabel | Kolom Utama | Deskripsi |
 |-------|-------------|-----------|
-| `reports` | id, locationName, reportType, description, created_at | Laporan jentik/DBD dari warga |
-| `subscribers` | id, locationName, email, created_at | Email subscriber peringatan darurat |
-| `premium_codes` | id, code, status, created_at | Kode premium kemasan Patchmos |
+| `reports` | id, location_name, report_type, description, created_at | Laporan jentik/DBD dari warga |
+| `subscribers` | id, location_name, email, created_at | Email pelanggan notifikasi |
+| `premium_codes` | id, code, is_used, created_at | Kode premium kemasan Patchmos |
+| `orders` | id, channel (online/offline), status, quantity, unit_price, total, customer_name, phone, address, payment_method, midtrans_order_id, midtrans_status, sold_at, is_test, notes | Penjualan online & offline (dibuat oleh migration Fase 1) |
+
+Semua tabel memakai RLS tanpa akses untuk `anon`/`authenticated`; hanya backend (service role) yang membaca/menulis.
 
 ---
 
 ## 👥 Tim Pengembang
 
-Dikembangkan oleh mahasiswa Universitas Teuku Umar sebagai proyek inovasi kesehatan masyarakat.
+Dikembangkan oleh mahasiswa Universitas Syiah Kuala (USK) sebagai bagian dari proyek kewirausahaan Patchmos, didanai Program Pendanaan Internal Kewirausahaan (PIKU) USK.
 
 ## 📄 Lisensi
 

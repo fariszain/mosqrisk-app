@@ -100,6 +100,8 @@ export default function EdukasiPage() {
   const [climateData, setClimateData] = useState([]);
   const [climatePeriod, setClimatePeriod] = useState('');
   const [isLoadingChart, setIsLoadingChart] = useState(true);
+  // "gps" = koordinat pengunjung; "bawaan" = Jakarta karena izin lokasi tidak diberikan
+  const [sumberLokasi, setSumberLokasi] = useState<'gps' | 'bawaan'>('gps');
 
   useEffect(() => {
     const t = setTimeout(() => setIsMounted(true), 0);
@@ -107,20 +109,27 @@ export default function EdukasiPage() {
   }, []);
 
   useEffect(() => {
-    const fetchClimateData = async (lat: number, lon: number) => {
+    const fetchClimateData = async (lat: number, lon: number, dariGps = true) => {
       try {
         setIsLoadingChart(true);
+        setSumberLokasi(dariGps ? 'gps' : 'bawaan');
         // Bulatkan koordinat ke 2 desimal agar konsisten
         const roundedLat = Math.round(lat * 100) / 100;
         const roundedLon = Math.round(lon * 100) / 100;
+
+        // Simpan ke localStorage agar refresh berikutnya konsisten — hanya koordinat GPS asli,
+        // supaya lokasi bawaan (Jakarta) tidak "terkunci" selamanya.
+        if (dariGps) {
+          try {
+            localStorage.setItem('edukasi_lat', String(roundedLat));
+            localStorage.setItem('edukasi_lon', String(roundedLon));
+          } catch(e) { /* ignore */ }
+        }
         
-        // Simpan ke localStorage agar refresh berikutnya konsisten
-        try {
-          localStorage.setItem('edukasi_lat', String(roundedLat));
-          localStorage.setItem('edukasi_lon', String(roundedLon));
-        } catch(e) { /* ignore */ }
-        
-        const res = await fetch(`http://127.0.0.1:8000/api/climate-trend?lat=${roundedLat}&lon=${roundedLon}`);
+        // Relatif ke domain sendiri: di dev diteruskan ke 127.0.0.1:8000 lewat rewrites,
+        // di Vercel diteruskan ke backend Python (vercel.json). Dulu di-hardcode ke localhost.
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+        const res = await fetch(`${API_URL}/api/climate-trend?lat=${roundedLat}&lon=${roundedLon}`);
         const result = await res.json();
         
         if (result.success && result.data) {
@@ -154,12 +163,12 @@ export default function EdukasiPage() {
         },
         (error) => {
           console.log("GPS denied/timeout, fallback to Jakarta");
-          fetchClimateData(-6.20, 106.81);
+          fetchClimateData(-6.20, 106.81, false);
         },
         { timeout: 15000, maximumAge: 300000 }
       );
     } else {
-      fetchClimateData(-6.20, 106.81);
+      fetchClimateData(-6.20, 106.81, false);
     }
   }, []);
 
@@ -200,7 +209,7 @@ export default function EdukasiPage() {
               </h1>
               
               <p className="text-gray-200 leading-relaxed text-lg md:text-xl mb-12 max-w-3xl mx-auto font-light">
-                <strong>Demam Berdarah Dengue (DBD)</strong> adalah penyakit yang ditularkan melalui gigitan nyamuk <em>Aedes aegypti</em> yang terinfeksi virus dengue. Penyakit ini merupakan ancaman kesehatan terbesar di daerah tropis.
+                <strong>Demam Berdarah Dengue (DBD)</strong> adalah penyakit yang ditularkan melalui gigitan nyamuk <em>Aedes aegypti</em> yang terinfeksi virus dengue. Penyakit ini banyak ditemukan di daerah tropis, termasuk Indonesia.
               </p>
               
               <div className="flex flex-col md:flex-row gap-6 justify-center items-stretch w-full max-w-5xl mx-auto">
@@ -226,12 +235,12 @@ export default function EdukasiPage() {
                     <div className="absolute -right-4 -bottom-4 opacity-10 pointer-events-none">
                        <span className="material-symbols-outlined text-[100px]">coronavirus</span>
                     </div>
-                    <p className="text-3xl md:text-5xl font-black text-[#EAC775]">706.297</p>
+                    <p className="text-3xl md:text-5xl font-black text-[#EAC775]">443.530</p>
                     <p className="text-gray-300 text-sm md:text-base mt-2 font-medium">Kasus Malaria 2025</p>
                   </div>
                 </div>
               </div>
-              <p className="text-gray-400 text-xs mt-6 text-center w-full">Sumber: Kementerian Kesehatan Republik Indonesia, Proyeksi Kasus 2025</p>
+              <p className="text-gray-300 text-xs mt-6 text-center w-full">Sumber: Kementerian Kesehatan (2026), data kasus 2025. Kematian akibat DBD: 673 (CFR 0,42%).</p>
             </div>
           </RevealOnScroll>
         </div>
@@ -296,8 +305,8 @@ export default function EdukasiPage() {
               <div>
                 <h4 className="font-bold text-[#1A3626] mb-1">Tahukah Anda?</h4>
                 <p className="text-[#414844] text-[15px] leading-relaxed">
-                  Nyamuk <em>Aedes aegypti</em> berkembang biak optimal pada suhu <strong>26-30°C</strong> dan 
-                  kelembapan <strong>≥70%</strong> — parameter inilah yang diukur otomatis oleh <strong>MosqRisk Analytics</strong>.
+                  Model Risiko MosqRisk memberi poin suhu tertinggi di sekitar <strong>28°C</strong> dan poin kelembapan penuh
+                  mulai <strong>80%</strong>. Keduanya dibaca dari prakiraan cuaca BMKG untuk wilayah yang kamu pilih.
                 </p>
               </div>
             </div>
@@ -322,7 +331,7 @@ export default function EdukasiPage() {
                 Metode <span className="text-[#EAC775]">3M Plus</span>
               </h2>
               <p className="text-white/80 max-w-xl text-[16px] leading-relaxed">
-                Program pencegahan DBD yang terbukti ampuh memutus rantai penularan dari sarangnya.
+                Langkah pencegahan DBD untuk memutus siklus hidup nyamuk dari sarangnya.
               </p>
             </div>
           </RevealOnScroll>
@@ -366,11 +375,7 @@ export default function EdukasiPage() {
       {/* SEKSI 5 — CARA KERJA MOSQRISK ANALYTICS */}
       {/* ═══════════════════════════════════════════════════════════ */}
       <section id="seksi-analytics" className="py-24 bg-[#F4F7F4] relative overflow-hidden">
-        {/* Giant background text for depth */}
-        <div className="absolute left-10 top-10 opacity-[0.02] pointer-events-none select-none font-black text-[200px] text-[#1A3626] leading-none">
-          AI
-        </div>
-        
+
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
           <RevealOnScroll>
             <div className="text-center mb-16">
@@ -378,7 +383,7 @@ export default function EdukasiPage() {
                 Cara Kerja <span className="text-[#EAC775]">MosqRisk</span> Analytics
               </h2>
               <p className="text-[#414844] text-lg max-w-2xl mx-auto">
-                Sistem peringatan dini (Early Warning System) cerdas berbasis data BMKG.
+                Model Risiko MosqRisk: formula berbobot berbasis literatur ilmiah yang membaca prakiraan cuaca BMKG.
               </p>
               <div className="w-24 h-1.5 bg-[#EAC775] rounded-full mx-auto mt-6"></div>
             </div>
@@ -388,8 +393,8 @@ export default function EdukasiPage() {
           <RevealOnScroll delay={50}>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-16">
               {[
-                { step: "1", icon: "cloud_download", title: "Ambil Data BMKG", desc: "Mengambil data prakiraan suhu, kelembapan, dan hujan secara real-time" },
-                { step: "2", icon: "calculate", title: "Hitung Risk Score", desc: "Parameter diberi skor bobot menggunakan algoritma kustom Mosquito Risk" },
+                { step: "1", icon: "cloud_download", title: "Ambil Data BMKG", desc: "Mengambil prakiraan suhu, kelembapan, dan hujan terbaru dari API publik BMKG" },
+                { step: "2", icon: "calculate", title: "Hitung Skor Risiko", desc: "Tiap parameter diberi poin dengan formula berbobot yang parameternya mengacu literatur ilmiah" },
                 { step: "3", icon: "map", title: "Visualisasi Peta", desc: "Skor dipetakan dalam zona Rendah, Sedang, atau Tinggi di dasbor" },
               ].map((flow, i) => (
                 <div key={i} className="relative flex flex-col sm:flex-row items-center sm:items-start text-center sm:text-left gap-4 bg-white rounded-3xl p-8 border border-green-100/50 shadow-sm hover:shadow-md transition-shadow">
@@ -410,38 +415,40 @@ export default function EdukasiPage() {
 
           {/* Parameter Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+            {/* Angka di bawah mengikuti calculate_mosquito_risk() di backend/main.py (skor harian dari BMKG). */}
             {[
               {
                 param: "Suhu (°C)",
                 icon: "thermostat",
                 weight: 40,
-                ideal: "26 – 30°C",
+                ideal: "Puncak 28°C",
                 ranges: [
-                  { label: "26-30°C (Ideal)", score: 40, bar: "w-full", color: "bg-[#1A3626]" },
-                  { label: "24-26°C / 30-32°C", score: 25, bar: "w-[62%]", color: "bg-[#EAC775]" },
-                  { label: "< 24°C / > 32°C", score: 10, bar: "w-[25%]", color: "bg-red-400" },
+                  { label: "28°C (puncak)", score: "40", bar: "w-full", color: "bg-[#1A3626]" },
+                  { label: "25°C", score: "33", bar: "w-[83%]", color: "bg-[#EAC775]" },
+                  { label: "31°C (turun lebih cepat di atas 28°C)", score: "20", bar: "w-[49%]", color: "bg-red-400" },
                 ],
               },
               {
                 param: "Kelembapan (%)",
                 icon: "water_drop",
-                weight: 30,
+                weight: 25,
                 ideal: "≥ 80%",
                 ranges: [
-                  { label: "≥ 80%", score: 30, bar: "w-full", color: "bg-[#1A3626]" },
-                  { label: "70 – 80%", score: 20, bar: "w-[67%]", color: "bg-[#EAC775]" },
-                  { label: "< 70%", score: 10, bar: "w-[33%]", color: "bg-red-400" },
+                  { label: "≥ 80%", score: "25", bar: "w-full", color: "bg-[#1A3626]" },
+                  { label: "70% (naik bertahap 60–80%)", score: "12,5", bar: "w-1/2", color: "bg-[#EAC775]" },
+                  { label: "< 60%", score: "maks. 10", bar: "w-[40%]", color: "bg-red-400" },
                 ],
               },
               {
-                param: "Curah Hujan (mm)",
+                param: "Curah Hujan Harian (mm)",
                 icon: "rainy",
-                weight: 30,
-                ideal: "0.5 – 20 mm",
+                weight: 35,
+                ideal: "0,5 – 20 mm",
                 ranges: [
-                  { label: "0.5-20mm (Genangan ideal)", score: 30, bar: "w-full", color: "bg-[#1A3626]" },
-                  { label: "> 20mm (Jentik tersapu)", score: 15, bar: "w-[50%]", color: "bg-[#EAC775]" },
-                  { label: "< 0.5mm (Kering)", score: 10, bar: "w-[33%]", color: "bg-red-400" },
+                  { label: "0,5–20 mm (genangan ideal)", score: "35", bar: "w-full", color: "bg-[#1A3626]" },
+                  { label: "20–35 mm", score: "20", bar: "w-[57%]", color: "bg-[#EAC775]" },
+                  { label: "0 mm (kering)", score: "10", bar: "w-[29%]", color: "bg-red-400" },
+                  { label: "> 35 mm (jentik tersapu)", score: "5", bar: "w-[14%]", color: "bg-red-400" },
                 ],
               },
             ].map((param, i) => (
@@ -472,7 +479,7 @@ export default function EdukasiPage() {
                       <div key={j}>
                         <div className="flex justify-between text-[13px] mb-1.5">
                           <span className="text-[#414844] font-medium">{range.label}</span>
-                          <span className="font-bold text-[#1A3626]">{range.score} pts</span>
+                          <span className="font-bold text-[#1A3626] whitespace-nowrap">{range.score} poin</span>
                         </div>
                         <div className="w-full h-2.5 bg-gray-100 rounded-full overflow-hidden">
                           <div className={`h-full ${range.bar} ${range.color} rounded-full transition-all duration-700`} />
@@ -485,6 +492,11 @@ export default function EdukasiPage() {
             ))}
           </div>
 
+          <p className="text-[#414844] text-[14px] leading-relaxed max-w-3xl mx-auto text-center mb-12">
+            Skor = poin suhu + kelembapan + curah hujan (rentang 5–100). Parameter mengacu Mordecai dkk. (2017) dan Liu-Helmersson dkk. (2014).
+            Ini formula berbasis literatur, bukan model <em>machine learning</em> yang dilatih dari data kasus.
+          </p>
+
           {/* Kategori */}
           <RevealOnScroll delay={500}>
             <div className="bg-white rounded-3xl shadow-lg border border-gray-100 p-8 md:p-10 mb-8">
@@ -494,7 +506,7 @@ export default function EdukasiPage() {
                   <span className="text-5xl mb-3 block">🟢</span>
                   <h4 className="text-xl font-extrabold text-green-700 mb-1">RENDAH</h4>
                   <p className="text-green-600 font-bold text-sm mb-3">Skor &lt; 50</p>
-                  <p className="text-green-600/80 text-[13px] leading-relaxed">Risiko infeksi minim. Tetap jaga kebersihan sanitasi.</p>
+                  <p className="text-green-600/80 text-[13px] leading-relaxed">Cuaca kurang mendukung perkembangbiakan nyamuk. Tetap jaga kebersihan lingkungan.</p>
                 </div>
                 <div className="bg-yellow-50/50 border border-yellow-100 rounded-2xl p-6 text-center hover:shadow-md transition-shadow">
                   <span className="text-5xl mb-3 block">🟡</span>
@@ -521,8 +533,8 @@ export default function EdukasiPage() {
                   <p className="text-[#E07A5F] font-semibold text-sm text-center mb-1">📅 Periode: {climatePeriod}</p>
                 )}
                 <p className="text-[#414844] text-[14px] text-center max-w-2xl mx-auto">
-                  Data historis aktual dari Open-Meteo menunjukkan korelasi antara tingginya curah hujan 
-                  dan peningkatan skor risiko penyebaran nyamuk di daerah Anda.
+                  Skor risiko bulanan dihitung dari data cuaca historis Open-Meteo (suhu, curah hujan, kelembapan, angin)
+                  memakai formula MosqRisk versi bulanan. Ini perkiraan kesesuaian cuaca bagi nyamuk, bukan data kasus DBD.
                 </p>
               </div>
               <div className="h-[400px] w-full relative flex items-center justify-center">
@@ -569,7 +581,7 @@ export default function EdukasiPage() {
                     <p className="text-xs font-bold text-red-500 uppercase tracking-widest mb-1">⚠️ Bulan Puncak Risiko Tertinggi</p>
                     <h4 className="text-2xl font-extrabold text-[#1A3626]">{peakMonth.name}</h4>
                     <p className="text-[#414844] text-sm mt-1">
-                      Bulan dengan risiko penyebaran nyamuk DBD tertinggi dalam 12 bulan terakhir di wilayah Anda.
+                      Bulan dengan skor risiko tertinggi dalam 12 bulan terakhir {sumberLokasi === 'gps' ? 'di sekitar lokasimu' : 'di Jakarta (lokasi bawaan karena izin lokasi tidak diberikan)'}.
                     </p>
                   </div>
                   <div className="flex gap-3 flex-shrink-0">
@@ -628,8 +640,8 @@ export default function EdukasiPage() {
                   Dari Limbah Menjadi <span className="text-[#EAC775]">Pelindung</span>
                 </h3>
                 <p className="text-white/80 text-[15px] md:text-[17px] max-w-2xl leading-relaxed">
-                  Indonesia menguasai 90% pasar minyak nilam dunia. Ampas nilam yang sebelumnya terbuang, 
-                  kini diolah menjadi bio-repellent alami yang aman dan 100% bebas DEET kimia.
+                  Indonesia menguasai sekitar 95% pasar minyak nilam dunia (Pusdatin Pertanian, 2024). Ampas sisa penyulingannya
+                  diolah Patchmos menjadi spray bio-repellent dengan bahan aktif alami, tanpa DEET.
                 </p>
               </div>
             </div>
@@ -643,22 +655,23 @@ export default function EdukasiPage() {
                   Mengapa Memilih Nilam?
                 </h3>
                 <p className="text-[#414844] text-[15px] leading-relaxed mb-8">
-                  Ampas nilam masih mengandung senyawa <strong>Patchouli alcohol</strong> yang terbukti secara laboratorium efektif 
-                  menolak gigitan nyamuk. Pendekatan ini mendukung konsep <em>circular economy</em> bagi petani di Aceh.
+                  Menurut literatur (Hikal dkk., 2023), ampas nilam masih mengandung senyawa bioaktif seperti seskuiterpen dan
+                  <em> patchouli alcohol</em> yang berpotensi dimanfaatkan sebagai repellent alami. Ini temuan tentang senyawanya,
+                  bukan hasil uji produk Patchmos. Pendekatan ini mendukung konsep <em>circular economy</em> nilam di Aceh.
                 </p>
                 <div className="space-y-4">
                   <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 flex items-start gap-4 hover:border-green-200 transition-colors">
                     <span className="material-symbols-outlined text-[#1A3626] text-2xl mt-0.5 shrink-0">science</span>
                     <div>
-                      <h4 className="font-bold text-[#1A3626] text-[15px] mb-1">Kandungan Aktif Terpenoid</h4>
-                      <p className="text-[#414844] text-[13px] leading-relaxed">Senyawa murni pembenci nyamuk alami tanpa efek samping gangguan pernapasan.</p>
+                      <h4 className="font-bold text-[#1A3626] text-[15px] mb-1">Senyawa Bioaktif Nilam</h4>
+                      <p className="text-[#414844] text-[13px] leading-relaxed">Seskuiterpen dan <em>patchouli alcohol</em> dalam ampas nilam berpotensi sebagai repellent alami (Hikal dkk., 2023).</p>
                     </div>
                   </div>
                   <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 flex items-start gap-4 hover:border-green-200 transition-colors">
                     <span className="material-symbols-outlined text-[#1A3626] text-2xl mt-0.5 shrink-0">volunteer_activism</span>
                     <div>
-                      <h4 className="font-bold text-[#1A3626] text-[15px] mb-1">Mendukung Petani Lokal</h4>
-                      <p className="text-[#414844] text-[13px] leading-relaxed">Menambah nilai ekonomi dari limbah pertanian yang sebelumnya dibakar atau dibuang.</p>
+                      <h4 className="font-bold text-[#1A3626] text-[15px] mb-1">Memberi Nilai pada Limbah</h4>
+                      <p className="text-[#414844] text-[13px] leading-relaxed">Lebih dari 95% hasil penyulingan nilam berupa limbah padat yang umumnya belum dimanfaatkan (Indriani dkk., 2025).</p>
                     </div>
                   </div>
                 </div>
@@ -678,10 +691,10 @@ export default function EdukasiPage() {
                 
                 <div className="space-y-5 relative z-10">
                   {[
-                    { icon: "block", title: "100% Bebas Bahan DEET", desc: "Aman untuk bayi, ibu hamil, dan kulit sangat sensitif." },
-                    { icon: "timer", title: "Proteksi Kuat 6 Jam", desc: "Formulasi mikroenkapsulasi menjaga molekul penolak menguap perlahan." },
-                    { icon: "recycling", title: "Zero Waste Product", desc: "Produk ramah lingkungan 100% dari ampas daur ulang (upcycled)." },
-                    { icon: "health_and_safety", title: "Teruji Laboratorium", desc: "Estimasi berdasarkan literatur akademik terbukti efektif mengusir nyamuk." },
+                    { icon: "block", title: "Tanpa DEET", desc: "Formula tidak memakai DEET; bahan aktifnya diekstrak dari ampas nilam." },
+                    { icon: "science", title: "Mikroenkapsulasi", desc: "Ekstrak dibungkus gelatin dan gum arab sebelum diformulasikan menjadi spray." },
+                    { icon: "recycling", title: "Dari Ampas Pascasuling", desc: "Memanfaatkan ampas nilam sisa penyulingan sebagai sumber bahan aktif." },
+                    { icon: "health_and_safety", title: "Uji Lab Sedang Direncanakan", desc: "Uji efikasi (adaptasi cage test WHO) dan patch test kulit belum dilakukan. Yang sudah: uji persepsi 10 responden." },
                   ].map((item, i) => (
                     <div key={i} className="flex items-start gap-4 bg-white/5 rounded-2xl p-4 border border-white/10 hover:bg-white/10 transition-colors backdrop-blur-sm">
                       <div className="w-12 h-12 rounded-xl bg-[#EAC775]/20 border border-[#EAC775]/30 flex items-center justify-center shrink-0">

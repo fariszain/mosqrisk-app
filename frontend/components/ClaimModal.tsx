@@ -4,7 +4,7 @@ import { useState, useRef } from "react";
 import { Scanner } from "@yudiel/react-qr-scanner";
 import { useRouter } from "next/navigation";
 import jsQR from "jsqr";
-import Image from "next/image";
+import Link from "next/link";
 
 interface ClaimModalProps {
   isOpen: boolean;
@@ -14,7 +14,7 @@ interface ClaimModalProps {
 export default function ClaimModal({ isOpen, onClose }: ClaimModalProps) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [activeTab, setActiveTab] = useState<"scan" | "manual" | "qris">("scan");
+  const [activeTab, setActiveTab] = useState<"scan" | "manual">("scan");
   const [code, setCode] = useState("");
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState("");
@@ -49,7 +49,8 @@ export default function ClaimModal({ isOpen, onClose }: ClaimModalProps) {
         }, 2000);
       } else {
         setStatus("error");
-        setErrorMessage(data.message);
+        // 422 (format kode tidak valid) tidak membawa "message" → beri pesan yang jelas
+        setErrorMessage(data.message || "Kode tidak valid atau tidak ditemukan.");
       }
     } catch {
       setStatus("error");
@@ -57,18 +58,8 @@ export default function ClaimModal({ isOpen, onClose }: ClaimModalProps) {
     }
   };
 
-  const handleQrisPayment = () => {
-    setStatus("loading");
-    setErrorMessage("");
-    setTimeout(() => {
-      localStorage.setItem('isPremium', 'true');
-      setStatus("success");
-      setTimeout(() => {
-        onClose();
-        router.push('/pantau'); // redirect to dashboard pantau
-      }, 2000);
-    }, 1500); // Simulate network request
-  };
+  // (Tab "Beli Akses" dihapus: isinya QR dummy + jeda 1,5 detik yang langsung memberi
+  //  Premium tanpa pembayaran apa pun. Pembelian sekarang lewat /checkout.)
 
   const onScan = (result: string | null) => {
     if (result && result.length > 0 && result[0].rawValue) {
@@ -148,17 +139,11 @@ export default function ClaimModal({ isOpen, onClose }: ClaimModalProps) {
           >
             Scan QR
           </button>
-          <button 
+          <button
             onClick={() => setActiveTab("manual")}
             className={`flex-1 py-3 text-xs md:text-sm font-semibold transition-colors ${activeTab === "manual" ? "text-[#1A3626] border-b-2 border-[#1A3626]" : "text-gray-400 hover:text-gray-600"}`}
           >
             Input Kode
-          </button>
-          <button 
-            onClick={() => setActiveTab("qris")}
-            className={`flex-1 py-3 text-xs md:text-sm font-semibold transition-colors flex items-center justify-center gap-1 ${activeTab === "qris" ? "text-[#EAC775] border-b-2 border-[#EAC775]" : "text-gray-400 hover:text-[#EAC775]"}`}
-          >
-            <span className="material-symbols-outlined text-[16px]">qr_code_2</span> Beli Akses
           </button>
         </div>
 
@@ -171,7 +156,7 @@ export default function ClaimModal({ isOpen, onClose }: ClaimModalProps) {
                 <span className="material-symbols-outlined text-3xl text-green-600">check_circle</span>
               </div>
               <h4 className="font-bold text-xl text-[#1A3626] mb-2">Aktivasi Berhasil!</h4>
-              <p className="text-gray-500 text-sm">Akun Anda sekarang berstatus Premium.</p>
+              <p className="text-gray-500 text-sm">Akses Premium aktif di perangkat ini.</p>
             </div>
           ) : (
             <>
@@ -237,29 +222,10 @@ export default function ClaimModal({ isOpen, onClose }: ClaimModalProps) {
                 </div>
               )}
 
-              {activeTab === "qris" && (
-                <div className="flex flex-col items-center">
-                  <p className="text-sm text-gray-500 mb-4 text-center">
-                    Beli akses Premium MosqRisk (Tanpa Kemasan). Harga <strong>Rp 15.000</strong>.
-                  </p>
-                  <div className="w-full max-w-[200px] aspect-square bg-gray-100 rounded-2xl flex items-center justify-center shadow-inner relative overflow-hidden mb-4 p-2 border-4 border-[#EAC775]">
-                    {/* Dummy QRIS Image */}
-                    <Image src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=Pembayaran_QRIS_MosqRisk" alt="QRIS" width={150} height={150} unoptimized className="w-full h-full object-contain mix-blend-multiply opacity-80" />
-                    <div className="absolute top-2 left-2 bg-red-500 text-white text-[10px] font-black px-2 py-0.5 rounded shadow">QRIS</div>
-                  </div>
-                  <button
-                    onClick={handleQrisPayment}
-                    disabled={status === "loading"}
-                    className="w-full bg-[#EAC775] hover:bg-yellow-400 text-[#1A3626] font-bold py-3.5 rounded-xl transition-all shadow-md flex items-center justify-center gap-2"
-                  >
-                    {status === "loading" ? (
-                      <span className="material-symbols-outlined animate-spin">progress_activity</span>
-                    ) : (
-                      "Saya Sudah Bayar"
-                    )}
-                  </button>
-                </div>
-              )}
+              <p className="mt-6 text-center text-sm text-gray-500">
+                Belum punya kode?{" "}
+                <Link href="/checkout" onClick={onClose} className="font-bold text-[#1A3626] underline underline-offset-4">Beli Patchmos</Link>
+              </p>
 
               {/* Error Message */}
               {status === "error" && (

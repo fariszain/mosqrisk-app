@@ -1,0 +1,44 @@
+[
+  {
+    "page": "/design-lab/a",
+    "width": 1440,
+    "height": 1760,
+    "overflowX": 0,
+    "errors": []
+  },
+  {
+    "page": "/design-lab/b",
+    "width": 1440,
+    "height": 1426,
+    "overflowX": 0,
+    "errors": []
+  },
+  {
+    "page": "/design-lab/c",
+    "width": 1440,
+    "height": 1649,
+    "overflowX": 0,
+    "errors": []
+  },
+  {
+    "page": "/design-lab/a",
+    "width": 390,
+    "height": 2975,
+    "overflowX": 0,
+    "errors": []
+  },
+  {
+    "page": "/design-lab/b",
+    "width": 390,
+    "height": 2258,
+    "overflowX": 0,
+    "errors": []
+  },
+  {
+    "page": "/design-lab/c",
+    "width": 390,
+    "height": 2753,
+    "overflowX": 0,
+    "errors": []
+  }
+]

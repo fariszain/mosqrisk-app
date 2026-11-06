@@ -22,13 +22,10 @@ export default function Footer() {
             <h3 className="font-extrabold text-3xl tracking-tight">Mosq<span className="text-[#EAC775]">Risk</span></h3>
           </div>
           <p className="text-white/70 text-[15px] leading-relaxed max-w-sm mb-6">
-            Platform pemantauan risiko nyamuk terintegrasi pertama di Indonesia. Melindungi keluarga Anda dengan inovasi hijau dan Kecerdasan Buatan (AI).
+            Patchmos: spray bio-repellent dengan bahan aktif dari ampas nilam Aceh. MosqRisk: pemantauan risiko nyamuk dari prakiraan cuaca BMKG.
           </p>
           <div className="flex gap-4">
-            <a href="#" className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center hover:bg-[#EAC775] hover:text-[#1A3626] hover:border-[#EAC775] transition-all duration-300">
-              <span className="material-symbols-outlined text-[18px]">public</span>
-            </a>
-            <a href="#" className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center hover:bg-[#EAC775] hover:text-[#1A3626] hover:border-[#EAC775] transition-all duration-300">
+            <a href="mailto:mosqrisk.official@gmail.com" aria-label="Kirim email ke tim MosqRisk" className="w-11 h-11 rounded-full bg-white/5 border border-white/10 flex items-center justify-center hover:bg-[#EAC775] hover:text-[#1A3626] hover:border-[#EAC775] transition-all duration-300">
               <span className="material-symbols-outlined text-[18px]">mail</span>
             </a>
           </div>
@@ -39,7 +36,7 @@ export default function Footer() {
           <h4 className="font-bold text-lg mb-6 text-white">Tautan Cepat</h4>
           <ul className="flex flex-col gap-4 text-white/70 text-[15px]">
             <li><Link href="/" className="hover:text-[#EAC775] hover:translate-x-1 transition-all duration-300 inline-block">Beranda</Link></li>
-            <li><Link href="/pantau" className="hover:text-[#EAC775] hover:translate-x-1 transition-all duration-300 inline-block">Dasbor Pantauan AI</Link></li>
+            <li><Link href="/pantau" className="hover:text-[#EAC775] hover:translate-x-1 transition-all duration-300 inline-block">Peta Pantauan Risiko</Link></li>
             <li><Link href="/lapor" className="hover:text-[#EAC775] hover:translate-x-1 transition-all duration-300 inline-block">Lapor Genangan Warga</Link></li>
             <li><Link href="/edukasi" className="hover:text-[#EAC775] hover:translate-x-1 transition-all duration-300 inline-block">Pusat Edukasi</Link></li>
             <li><Link href="/checkout" className="hover:text-[#EAC775] hover:translate-x-1 transition-all duration-300 inline-block font-semibold">Beli Patchmos Spray</Link></li>
@@ -48,7 +45,7 @@ export default function Footer() {
 
         {/* Contact/Support */}
         <div className="md:col-span-4">
-          <h4 className="font-bold text-lg mb-6 text-white">Dukungan & Mitra</h4>
+          <h4 className="font-bold text-lg mb-6 text-white">Kontak</h4>
           <ul className="flex flex-col gap-4 text-white/70 text-[15px] mb-8">
             <li className="flex items-start gap-3">
               <span className="material-symbols-outlined text-[#EAC775] text-[20px] mt-0.5">location_on</span>
@@ -56,18 +53,18 @@ export default function Footer() {
             </li>
             <li className="flex items-start gap-3">
               <span className="material-symbols-outlined text-[#EAC775] text-[20px] mt-0.5">mail</span>
-              mosqrisk.official@gmail.com
+              <a href="mailto:mosqrisk.official@gmail.com" className="hover:text-[#EAC775] transition-colors">mosqrisk.official@gmail.com</a>
             </li>
           </ul>
-          
-          <div className="inline-flex items-center gap-3 px-5 py-3 rounded-2xl border border-white/10 bg-white/5 backdrop-blur-sm">
-            <div className="w-10 h-10 rounded-full bg-[#EAC775]/20 flex items-center justify-center">
-              <span className="material-symbols-outlined text-[#EAC775]">security</span>
-            </div>
-            <div>
-              <p className="text-[11px] text-white/50 uppercase tracking-widest font-bold">Terintegrasi Resmi</p>
-              <p className="text-[13px] font-semibold text-white/90">Kemenkes RI & BMKG</p>
-            </div>
+
+          {/* Atribusi sumber data — bukan kemitraan/afiliasi resmi dengan instansi mana pun */}
+          <div className="border-t border-white/10 pt-5">
+            <p className="text-[11px] text-white/50 uppercase tracking-widest font-bold mb-3">Sumber data</p>
+            <ul className="flex flex-col gap-1.5 text-[13px] text-white/75 leading-relaxed">
+              <li>Prakiraan cuaca: BMKG (API publik)</li>
+              <li>Tren iklim historis: Open-Meteo</li>
+              <li>Statistik kasus DBD: Kementerian Kesehatan (2026)</li>
+            </ul>
           </div>
         </div>
       </div>
@@ -76,8 +73,7 @@ export default function Footer() {
       <div className="max-w-7xl mx-auto pt-8 border-t border-white/10 flex flex-col md:flex-row justify-between items-center gap-4 text-[13px] text-white/40">
         <p>&copy; {new Date().getFullYear()} MosqRisk Analytics Team. Hak Cipta Dilindungi.</p>
         <div className="flex gap-6">
-          <a href="#" className="hover:text-white transition-colors">Syarat & Ketentuan</a>
-          <a href="#" className="hover:text-white transition-colors">Kebijakan Privasi</a>
+          <Link href="/privasi" className="hover:text-white transition-colors">Kebijakan Privasi</Link>
         </div>
       </div>
     </footer>
