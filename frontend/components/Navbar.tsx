@@ -1,9 +1,21 @@
 "use client";
 
-import Link from "next/link";
-import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import Image from "next/image";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { ShoppingBagIcon } from "@phosphor-icons/react/ssr";
+import { kelasTombol } from "@/components/ui/tombol";
+
+// Header global: tanda daun Patchmos (aset asli) + nama, navigasi, tombol Beli.
+// Kapsul putih melayang (sticky, ada jarak dari tepi layar); bayangan menebal setelah digulir.
+// Di < 768 px navigasi pindah ke BottomNav.
+const MENU = [
+  { href: "/pantau", label: "Pantau risiko" },
+  { href: "/lapor", label: "Lapor warga" },
+  { href: "/edukasi", label: "Edukasi" },
+  { href: "/tim", label: "Tim" },
+];
 
 interface NavbarProps {
   rightAction?: React.ReactNode;
@@ -11,71 +23,75 @@ interface NavbarProps {
 
 export default function Navbar({ rightAction }: NavbarProps) {
   const pathname = usePathname();
-  const [isMounted, setIsMounted] = useState(false);
+  const aktif = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
+  const [digulir, setDigulir] = useState(false);
 
   useEffect(() => {
-    const t = setTimeout(() => setIsMounted(true), 10);
-    return () => clearTimeout(t);
+    const cek = () => setDigulir(window.scrollY > 8);
+    cek();
+    window.addEventListener("scroll", cek, { passive: true });
+    return () => window.removeEventListener("scroll", cek);
   }, []);
 
-  const isActive = (path: string) => pathname === path;
-
   return (
-    <>
-      <div className={`fixed top-4 md:top-6 left-0 w-full z-50 flex justify-center px-4 pointer-events-none transition-all duration-700 ease-out ${isMounted ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-full'}`}>
-        <nav className="pointer-events-auto bg-white/95 backdrop-blur-md rounded-full shadow-[0_4px_30px_rgb(0,0,0,0.06)] border border-gray-100 w-full max-w-[1200px] px-6 md:px-8 py-3 flex justify-between items-center">
-          
-          {/* Left: Logo */}
-          <Link href="/" className="flex items-center gap-3 group cursor-pointer shrink-0">
-            <Image 
-              src="/logonavbar.png" 
-              alt="MosqRisk Logo" 
-              width={1500}
-              height={1500}
-              quality={100}
-              className="h-8 w-auto object-contain drop-shadow-sm group-hover:rotate-12 transition-transform duration-300"
+    <header className="pointer-events-none sticky top-0 z-50 px-3 pt-3 md:px-6 md:pt-4">
+      <div
+        className={`pointer-events-auto mx-auto flex h-14 max-w-[76rem] items-center justify-between gap-6 rounded-full border pl-4 pr-2 transition-[background-color,box-shadow,border-color] duration-300 md:h-16 md:pl-6 ${
+          digulir ? "border-garis/80 bg-white/90 shadow-angkat backdrop-blur-md" : "border-garis bg-white shadow-tipis"
+        }`}
+      >
+        <Link href="/" aria-label="Patchmos, ke Beranda" className="group -my-1 flex shrink-0 items-center gap-2 rounded-kontrol">
+          <Image
+            src="/brand/patchmos-logo-mark.png"
+            alt=""
+            width={894}
+            height={886}
+            priority
+            sizes="40px"
+            className="h-7 w-7 transition-transform duration-500 group-hover:-rotate-6 md:h-8 md:w-8"
+          />
+          {/* Tulisan PATCHMOS serif dari logo asli (bagian bawah patchmos-logo.png, baris 992–1237 px).
+              Dipotong lewat CSS — file logo tidak diedit. */}
+          <span aria-hidden="true" className="relative block aspect-[1837/245] h-[13px] overflow-hidden md:h-[15px]">
+            <Image
+              src="/brand/patchmos-logo.png"
+              alt=""
+              width={1837}
+              height={1237}
+              sizes="320px"
+              className="absolute bottom-0 left-0 h-auto w-full max-w-none"
             />
-            <div className="hidden w-8 h-8 bg-[#1A3626] rounded-xl items-center justify-center text-white font-bold text-lg group-hover:scale-105 transition-transform shadow-md">
-              M
-            </div>
-            <span className="font-extrabold text-[22px] tracking-tight text-[#1A3626] hidden sm:block">MosqRisk</span>
-          </Link>
+          </span>
+        </Link>
 
-          {/* Center: Links (Phom Style) */}
-          <div className="hidden lg:flex items-center justify-center gap-8 flex-1 px-8">
-            <Link href="/" className={`${isActive('/') ? 'text-[#1A3626]' : 'text-gray-500'} hover:text-[#1A3626] font-bold text-[15px] transition-colors`}>
-              Beranda
+        <nav aria-label="Navigasi utama" className="hidden items-center gap-1 md:flex">
+          {MENU.map((m) => (
+            <Link
+              key={m.href}
+              href={m.href}
+              aria-current={aktif(m.href) ? "page" : undefined}
+              className={`relative rounded-full px-4 py-2 text-[15px] font-semibold tracking-[-0.01em] transition-colors ${
+                aktif(m.href) ? "bg-kemasan text-white" : "text-tinta/75 hover:bg-kertas hover:text-tinta"
+              }`}
+            >
+              {m.label}
             </Link>
-            <Link href="/pantau" className={`${isActive('/pantau') ? 'text-[#1A3626]' : 'text-gray-500'} hover:text-[#1A3626] font-bold text-[15px] transition-colors`}>
-              Peta Pantauan
-            </Link>
-            <Link href="/lapor" className={`${isActive('/lapor') ? 'text-[#1A3626]' : 'text-gray-500'} hover:text-[#1A3626] font-bold text-[15px] transition-colors`}>
-              Lapor Warga
-            </Link>
-            <Link href="/edukasi" className={`${isActive('/edukasi') ? 'text-[#1A3626]' : 'text-gray-500'} hover:text-[#1A3626] font-bold text-[15px] transition-colors`}>
-              Edukasi
-            </Link>
-          </div>
-
-          {/* Right: Actions */}
-          <div className="flex items-center gap-4 shrink-0">
-            {rightAction ? (
-              rightAction
-            ) : (
-              <div className="flex items-center gap-2">
-                <Link href="/checkout" className="flex bg-[#1A3626] text-white hover:bg-green-900 font-bold px-4 md:px-6 py-2.5 rounded-full transition-colors shadow-sm text-[13px] md:text-[15px] items-center gap-2">
-                  <span className="material-symbols-outlined text-[16px] md:text-[18px] text-[#EAC775]">shopping_cart</span>
-                  <span className="hidden sm:block">Beli Patchmos</span>
-                  <span className="block sm:hidden">Beli</span>
-                </Link>
-              </div>
-            )}
-          </div>
-
+          ))}
         </nav>
+
+        <div className="flex shrink-0 items-center gap-3">
+          {rightAction}
+          {/* Di halaman checkout tombol ini tidak perlu — pengguna sudah di sana */}
+          {pathname !== "/checkout" && (
+            <Link href="/checkout" className={kelasTombol("utama", "sm", "rounded-full! px-5")}>
+              <ShoppingBagIcon size={19} weight="duotone" aria-hidden="true" />
+              <span>
+                Beli<span className="hidden sm:inline"> Patchmos</span>
+              </span>
+            </Link>
+          )}
+        </div>
       </div>
-      
-      
-    </>
+    </header>
   );
 }

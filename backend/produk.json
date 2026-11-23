@@ -1,0 +1,18 @@
+{
+  "_catatan": "SATU-SATUNYA sumber nama, harga, batas pesanan, dan ongkos kirim Patchmos. Dibaca backend/main.py (menghitung tagihan) dan frontend/next.config.ts (menampilkan harga & ongkir saat build). Harga Rp20.000 bersifat SEMENTARA (keputusan tim 2026-11-06). Ongkir SEMENTARA (2026-11-07): gratis untuk diantar di Banda Aceh & Aceh Besar dan untuk ambil sendiri — kalau tim ingin menagih ongkir, cukup ganti angka 'ongkir' (rupiah) lalu deploy ulang.",
+  "nama": "Patchmos Spray 50 mL",
+  "harga_per_botol": 20000,
+  "maks_botol_per_pesanan": 20,
+  "pengiriman": {
+    "antar": {
+      "label": "Diantar tim Patchmos",
+      "keterangan": "Khusus Banda Aceh dan Aceh Besar. Tim menghubungi nomor HP-mu untuk jadwal antar.",
+      "ongkir": 0
+    },
+    "ambil": {
+      "label": "Ambil sendiri",
+      "keterangan": "Di sekitar kampus USK, Darussalam, Banda Aceh. Waktu dan titik temu dikabari lewat nomor HP-mu.",
+      "ongkir": 0
+    }
+  }
+}

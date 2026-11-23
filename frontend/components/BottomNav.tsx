@@ -2,40 +2,52 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { BookOpenIcon, HouseIcon, MapPinIcon, MegaphoneIcon, UsersThreeIcon } from "@phosphor-icons/react/ssr";
+
+// Navigasi bawah untuk layar < 768 px. Disembunyikan di alur yang butuh fokus (checkout, admin).
+// Item aktif: ikon terisi (duotone) di atas kapsul hijau pucat.
+const MENU = [
+  { href: "/", label: "Beranda", Ikon: HouseIcon },
+  { href: "/pantau", label: "Pantau", Ikon: MapPinIcon },
+  { href: "/lapor", label: "Lapor", Ikon: MegaphoneIcon },
+  { href: "/edukasi", label: "Edukasi", Ikon: BookOpenIcon },
+  { href: "/tim", label: "Tim", Ikon: UsersThreeIcon },
+];
+
+const DISEMBUNYIKAN = ["/checkout", "/admin"];
 
 export default function BottomNav() {
   const pathname = usePathname();
-
-  const navItems = [
-    { name: "Beranda", path: "/", icon: "home" },
-    { name: "Pantau", path: "/pantau", icon: "radar" },
-    { name: "Lapor", path: "/lapor", icon: "add_location" },
-    { name: "Edukasi", path: "/edukasi", icon: "menu_book" },
-  ];
+  if (DISEMBUNYIKAN.some((p) => pathname === p || pathname.startsWith(`${p}/`))) return null;
 
   return (
-    <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50 px-2 pb-safe shadow-[0_-4px_10px_rgba(0,0,0,0.05)]">
-      <div className="flex justify-between items-center h-16">
-        {navItems.map((item) => {
-          const isActive = pathname === item.path;
+    <nav
+      aria-label="Navigasi utama"
+      className="fixed inset-x-0 bottom-0 z-50 border-t border-garis/80 bg-white/92 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden"
+    >
+      <ul className="grid h-16 grid-cols-5">
+        {MENU.map(({ href, label, Ikon }) => {
+          const aktif = href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`);
           return (
-            <Link
-              key={item.path}
-              href={item.path}
-              className={`flex flex-col items-center justify-center w-full h-full space-y-1 transition-colors duration-200 ${
-                isActive ? "text-[#1A3626]" : "text-gray-400 hover:text-gray-600"
-              }`}
-            >
-              <span className={`material-symbols-outlined text-[24px] ${isActive ? "font-bold" : ""}`}>
-                {item.icon}
-              </span>
-              <span className={`text-[10px] ${isActive ? "font-bold" : "font-medium"}`}>
-                {item.name}
-              </span>
-            </Link>
+            <li key={href}>
+              <Link
+                href={href}
+                aria-current={aktif ? "page" : undefined}
+                className={`flex h-full flex-col items-center justify-center gap-0.5 text-[11.5px] transition-colors ${
+                  aktif ? "font-bold text-kemasan" : "font-medium text-sekunder"
+                }`}
+              >
+                <span
+                  className={`flex h-7 w-12 items-center justify-center rounded-full transition-colors duration-300 ${aktif ? "bg-kertas-gelap" : ""}`}
+                >
+                  <Ikon size={22} weight={aktif ? "duotone" : "regular"} aria-hidden="true" />
+                </span>
+                {label}
+              </Link>
+            </li>
           );
         })}
-      </div>
-    </div>
+      </ul>
+    </nav>
   );
 }

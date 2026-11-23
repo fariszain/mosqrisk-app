@@ -89,6 +89,9 @@ memperbarui bagian desain di `AGENTS.md`.
 
 ## Fase 3 — Redesign seluruh halaman
 
+> **Status 2026-11-07: selesai** (semua halaman + `/tim` + 404/galat; detail & bukti di `PROGRESS.md`).
+> Sisa yang bergantung pada tim: foto tim & dokumentasi produksi, render kemasan 50 mL.
+
 Urutan (dari yang paling dilihat juri): **Beranda → `/tim` (baru) → `/pantau` → `/checkout`
 → `/lapor` → `/edukasi` → `/claim` → `/admin` → komponen global** (Navbar, BottomNav, Footer,
 ClaimModal).
@@ -146,7 +149,7 @@ dicek tim.
 | ~~C2 Penyebutan "AI" untuk skor risiko~~ | Fase 1 | **Diputuskan 2026-11-06**: "Model Risiko MosqRisk" |
 | ~~C3 Jual sebelum expo lewat web atau offline?~~ | Fase 1 | **Diputuskan 2026-11-06**: dua-duanya — online lewat checkout + Midtrans (tabel `orders`, label "mode uji coba" selama sandbox) dan offline dicatat admin di `/admin` |
 | C4 Jalankan migration RLS + tabel `orders` | Fase 1 | Kamu review lalu jalankan di SQL Editor Supabase (langkah di `PROGRESS.md`) |
-| C5 Arah desain | Fase 2 | Pilih dari prototipe |
+| ~~C5 Arah desain~~ | Fase 2 | **Diputuskan 2026-11-07** (didelegasikan user): A "Label Apotek Botani" + modul indikator risiko (B) + modul rantai nilam (C). **Direvisi 2026-11-07 sore** atas masukan user (terlalu kosong & kaku) → v2 "Kebun Nilam Aceh". Aturan: `.claude/skills/mosqrisk-design/SKILL.md` |
 | Harga final | Minggu depan | Cukup ganti 1 konstanta + teks di `05_FAKTA` |
 | Provider LLM + kartu pembayaran | Sebelum Fase 4 | Lihat `03_CHATBOT_SPEC §1` |
 | Foto tim & dokumentasi produksi | Sebelum `/tim` final | Taruh di `frontend/public/tim/` |

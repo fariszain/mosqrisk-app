@@ -1,11 +1,27 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
-import Link from 'next/link';
-import { toast } from 'react-hot-toast';
-import { motion, AnimatePresence } from 'framer-motion';
-import SalesPanel, { selCSV } from '@/components/admin/SalesPanel';
+import { useEffect, useMemo, useState } from "react";
+import Image from "next/image";
+import Link from "next/link";
+import { toast } from "react-hot-toast";
+import {
+  ChatTextIcon,
+  DownloadSimpleIcon,
+  DropIcon,
+  EnvelopeSimpleIcon,
+  FirstAidKitIcon,
+  MagnifyingGlassIcon,
+  MegaphoneIcon,
+  TrashIcon,
+  XIcon,
+} from "@phosphor-icons/react/ssr";
+import SalesPanel, { selCSV } from "@/components/admin/SalesPanel";
+import Dialog from "@/components/ui/Dialog";
+import { kelasTombol } from "@/components/ui/tombol";
+import { kelasInput, kelasLabel } from "@/components/ui/bidang";
 
+// Dasbor admin: fungsional dan padat, bukan halaman pamer (02_DESIGN_BRIEF §6).
+// Semua aksi divalidasi backend dengan ADMIN_KEY (fail closed — tanpa ADMIN_KEY semua ditolak).
 interface Report {
   id: number;
   report_type?: string;
@@ -23,582 +39,384 @@ interface Subscriber {
   [key: string]: unknown;
 }
 
-const ExportButton = ({ onClick }: { onClick: () => void }) => (
-  <motion.button 
-    whileHover={{ scale: 1.03, backgroundColor: '#f9fafb' }}
-    whileTap={{ scale: 0.95 }}
-    onClick={onClick} 
-    className="bg-white text-gray-700 border border-gray-200 px-4 py-2 rounded-xl text-sm font-semibold flex items-center gap-2 transition-shadow hover:shadow-md"
-  >
-    <span className="material-symbols-outlined text-[18px] text-[#EAC775]">download</span> Export CSV
-  </motion.button>
-);
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "";
+const LABEL_JENIS: Record<string, string> = { JENTIK: "Jentik / genangan", DBD: "Suspect DBD", LAINNYA: "Lainnya" };
+const waktu = (iso: string) => new Date(iso).toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" });
 
-const DeleteButton = ({ onClick, title }: { onClick: () => void, title: string }) => (
-  <motion.button 
-    whileHover={{ scale: 1.1, backgroundColor: '#fef2f2', color: '#dc2626' }}
-    whileTap={{ scale: 0.9 }}
-    onClick={onClick} 
-    className="w-10 h-10 flex items-center justify-center text-gray-400 bg-gray-50/50 rounded-xl transition-colors border border-transparent hover:border-red-100" 
-    title={title}
-  >
-    <span className="material-symbols-outlined text-[20px]">delete</span>
-  </motion.button>
-);
+type Konfirmasi = { judul: string; isi: string; tombol: string; jalankan: () => Promise<void> } | null;
+
+function unduhCSV(data: Record<string, unknown>[], namaBerkas: string) {
+  if (!data.length) return;
+  const kolom = Object.keys(data[0]);
+  const csv = [kolom.join(","), ...data.map((baris) => kolom.map((k) => selCSV(baris[k])).join(","))].join("\n");
+  const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = namaBerkas;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 export default function AdminDashboard() {
+  const [masuk, setMasuk] = useState(false);
+  const [pin, setPin] = useState("");
+  const [pinSalah, setPinSalah] = useState("");
+  const [memeriksa, setMemeriksa] = useState(false);
+
   const [reports, setReports] = useState<Report[]>([]);
   const [subscribers, setSubscribers] = useState<Subscriber[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
-  
-  // Security State
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [pin, setPin] = useState('');
-  const [pinError, setPinError] = useState(false);
-  
-  // Broadcast State
-  const [isBroadcasting, setIsBroadcasting] = useState(false);
+  const [memuat, setMemuat] = useState(true);
+  const [cari, setCari] = useState("");
+  const [konfirmasi, setKonfirmasi] = useState<Konfirmasi>(null);
+  const [menjalankan, setMenjalankan] = useState(false);
+
+  const header = useMemo(() => ({ Authorization: `Bearer ${pin}` }), [pin]);
 
   useEffect(() => {
-    if (!isAuthenticated) return;
-    
-    const t = setTimeout(() => setLoading(true), 0);
-    const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
-    const headers = { 'Authorization': `Bearer ${pin}` };
+    if (!masuk) return;
+    setMemuat(true);
+    const ambil = (url: string) =>
+      fetch(url, { headers: header }).then(async (res) => ({ ok: res.ok, data: await res.json().catch(() => null) }));
+    Promise.all([ambil(`${API_URL}/api/reports`), ambil(`${API_URL}/api/subscribe`)])
+      .then(([r, s]) => {
+        if (r.ok && r.data?.success) setReports(r.data.data || []);
+        else toast.error("Laporan gagal dimuat.");
+        if (s.ok && s.data?.success) setSubscribers(s.data.data || []);
+        else toast.error("Data pelanggan gagal dimuat.");
+      })
+      .catch(() => toast.error("Server tidak bisa dihubungi."))
+      .finally(() => setMemuat(false));
+  }, [masuk, header]);
 
-    const fetchAndParse = (url: string) => fetch(url, { headers }).then(async res => {
-      const text = await res.text();
-      try {
-        return { status: res.status, ok: res.ok, data: JSON.parse(text) };
-      } catch {
-        return { status: res.status, ok: res.ok, text };
-      }
-    });
-
-    Promise.all([
-      fetchAndParse(`${API_URL}/api/reports`),
-      fetchAndParse(`${API_URL}/api/subscribe`)
-    ])
-    .then(([reportsRes, subsRes]) => {
-      if(reportsRes.ok && reportsRes.data?.success) {
-        setReports(reportsRes.data.data || []);
-      } else {
-        toast.error("Gagal memuat laporan");
-      }
-      
-      if(subsRes.ok && subsRes.data?.success) {
-        setSubscribers(subsRes.data.data || []);
-      } else {
-        toast.error("Gagal memuat data pelanggan");
-      }
-    })
-    .catch(() => {
-      toast.error("Error jaringan saat memuat data");
-    })
-    .finally(() => {
-      setLoading(false);
-      clearTimeout(t);
-    });
-  }, [isAuthenticated, pin]);
-
-  const filteredReports = reports.filter(r => 
-    String(r.location_name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-    String(r.description || '').toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
-  const filteredSubscribers = subscribers.filter(s => 
-    String(s.location_name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-    String(s.email || '').toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
-  const totalReports = reports.length;
-  const dbdCases = reports.filter(r => r.report_type?.toUpperCase() === 'DBD').length;
-  const nyamukCases = reports.filter(r => r.report_type?.toUpperCase() === 'JENTIK').length;
-  const totalSubscribers = subscribers.length;
-  
-  const handleLogin = async (e: React.FormEvent) => {
+  const masukDasbor = async (e: React.FormEvent) => {
     e.preventDefault();
+    setPinSalah("");
+    setMemeriksa(true);
     try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
-      const res = await fetch(`${API_URL}/api/admin/verify`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${pin}` }
-      });
-      const data = await res.json();
-      
-      if (res.ok && data.success) {
-        setIsAuthenticated(true);
-        setPinError(false);
-      } else {
-        setPinError(true);
-      }
+      const res = await fetch(`${API_URL}/api/admin/verify`, { method: "POST", headers: header });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) setMasuk(true);
+      else if (res.status === 503) setPinSalah("Akses admin belum dikonfigurasi di server (ADMIN_KEY kosong).");
+      else setPinSalah("PIN tidak cocok. Coba lagi.");
     } catch {
-      setPinError(true);
-    }
-  };
-
-  const handleBroadcast = async () => {
-    if (!confirm('Kirim email peringatan kewaspadaan DBD ke SEMUA pelanggan terdaftar? (Belum ditarget per tingkat risiko wilayah.)')) return;
-    
-    setIsBroadcasting(true);
-    try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
-      const res = await fetch(`${API_URL}/api/broadcast`, { 
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${pin}` }
-      });
-      const data = await res.json();
-      if (data.success) {
-        toast.success('Broadcast Peringatan berhasil dijadwalkan!');
-      } else {
-        toast.error('Gagal: ' + data.message);
-      }
-    } catch {
-      toast.error('Error koneksi ke server.');
+      setPinSalah("Server tidak bisa dihubungi. Periksa koneksi, lalu coba lagi.");
     } finally {
-      setIsBroadcasting(false);
+      setMemeriksa(false);
     }
   };
 
-  const exportCSV = (data: Record<string, unknown>[], filename: string) => {
-    if (!data.length) return;
-    const headers = Object.keys(data[0]);
-    const csv = [headers.join(','), ...data.map(row => headers.map(h => selCSV(row[h])).join(','))].join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
+  const kirimPeringatan = async () => {
+    const res = await fetch(`${API_URL}/api/broadcast`, { method: "POST", headers: header });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data.success) toast.success("Peringatan dijadwalkan untuk dikirim ke semua pelanggan.");
+    else toast.error(data.message || "Peringatan gagal dikirim.");
   };
 
-  const handleDeleteReport = async (id: number) => {
-    if (!confirm('Hapus laporan ini permanen?')) return;
-    const previousReports = [...reports];
-    setReports(reports.filter(r => r.id !== id));
-    
+  const hapusLaporan = async (id: number) => {
+    const sebelumnya = reports;
+    setReports(reports.filter((r) => r.id !== id));
+    const res = await fetch(`${API_URL}/api/reports/${id}`, { method: "DELETE", headers: header }).catch(() => null);
+    const data = await res?.json().catch(() => null);
+    if (res?.ok && data?.success) toast.success("Laporan dihapus.");
+    else {
+      setReports(sebelumnya);
+      toast.error("Laporan gagal dihapus.");
+    }
+  };
+
+  const hapusPelanggan = async (id: number) => {
+    const sebelumnya = subscribers;
+    setSubscribers(subscribers.filter((s) => s.id !== id));
+    const res = await fetch(`${API_URL}/api/subscribe/${id}`, { method: "DELETE", headers: header }).catch(() => null);
+    const data = await res?.json().catch(() => null);
+    if (res?.ok && data?.success) toast.success("Pelanggan dihapus.");
+    else {
+      setSubscribers(sebelumnya);
+      toast.error("Pelanggan gagal dihapus.");
+    }
+  };
+
+  const jalankanKonfirmasi = async () => {
+    if (!konfirmasi) return;
+    setMenjalankan(true);
     try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
-      const res = await fetch(`${API_URL}/api/reports/${id}`, { 
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${pin}` }
-      });
-      const data = await res.json();
-      if (data.success) {
-        toast.success('Laporan berhasil dihapus');
-      } else {
-        setReports(previousReports);
-        toast.error('Gagal menghapus laporan: ' + data.message);
-      }
+      await konfirmasi.jalankan();
     } catch {
-      setReports(previousReports);
-      toast.error('Error koneksi ke server.');
+      toast.error("Server tidak bisa dihubungi.");
+    } finally {
+      setMenjalankan(false);
+      setKonfirmasi(null);
     }
   };
 
-  const handleDeleteSubscriber = async (id: number) => {
-    if (!confirm('Hapus pelanggan email ini permanen?')) return;
-    const previousSubscribers = [...subscribers];
-    setSubscribers(subscribers.filter(s => s.id !== id));
+  const q = cari.trim().toLowerCase();
+  const laporanTampil = reports.filter((r) => !q || `${r.location_name} ${r.description} ${r.report_type}`.toLowerCase().includes(q));
+  const pelangganTampil = subscribers.filter((s) => !q || `${s.location_name} ${s.email}`.toLowerCase().includes(q));
+  const ringkas = [
+    { label: "Laporan warga", nilai: reports.length, Ikon: ChatTextIcon },
+    { label: "Laporan suspect DBD", nilai: reports.filter((r) => r.report_type?.toUpperCase() === "DBD").length, Ikon: FirstAidKitIcon },
+    { label: "Laporan jentik", nilai: reports.filter((r) => r.report_type?.toUpperCase() === "JENTIK").length, Ikon: DropIcon },
+    { label: "Pelanggan email", nilai: subscribers.length, Ikon: EnvelopeSimpleIcon },
+  ];
 
-    try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
-      const res = await fetch(`${API_URL}/api/subscribe/${id}`, { 
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${pin}` }
-      });
-      const data = await res.json();
-      if (data.success) {
-        toast.success('Pelanggan berhasil dihapus');
-      } else {
-        setSubscribers(previousSubscribers);
-        toast.error('Gagal menghapus pelanggan: ' + data.message);
-      }
-    } catch {
-      setSubscribers(previousSubscribers);
-      toast.error('Error koneksi ke server.');
-    }
-  };
-
-  // Variants for staggered animations
-  const containerVariants = {
-    hidden: { opacity: 0 },
-    show: {
-      opacity: 1,
-      transition: { staggerChildren: 0.1 }
-    }
-  };
-  
-  const itemVariants = {
-    hidden: { opacity: 0, y: 20 },
-    show: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 300, damping: 24 } }
-  };
-
-  if (!isAuthenticated) {
+  if (!masuk) {
     return (
-      <div className="min-h-screen bg-[#F4F7F4] flex items-center justify-center p-4">
-        <motion.div 
-          initial={{ opacity: 0, scale: 0.95, y: 10 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          transition={{ duration: 0.4 }}
-          className="bg-white p-10 rounded-[2rem] shadow-xl shadow-gray-200/50 border border-gray-100 max-w-sm w-full text-center relative overflow-hidden"
-        >
-          <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-[#1A3626] to-[#EAC775]"></div>
-          
-          <div className="w-20 h-20 bg-[#F4F7F4] rounded-2xl flex items-center justify-center mx-auto mb-6">
-            <span className="material-symbols-outlined text-[#1A3626] text-4xl">admin_panel_settings</span>
+      <main id="konten" className="flex flex-1 items-center justify-center bg-kertas px-4 py-16">
+        <div className="w-full max-w-sm rounded-media bg-white p-6 shadow-angkat md:p-8">
+          <div className="flex items-center gap-2.5">
+            <Image src="/brand/patchmos-logo-mark.png" alt="" width={894} height={886} className="h-10 w-10" priority />
+            <span className="text-[21px] font-extrabold tracking-[-0.03em] text-kemasan">Patchmos</span>
           </div>
-          <h1 className="font-bold text-2xl text-gray-900 mb-2 tracking-tight">Pusat Komando</h1>
-          <p className="text-gray-500 text-sm mb-8 font-medium">Verifikasi PIN untuk akses data warga.</p>
-          
-          <form onSubmit={handleLogin}>
-            <input 
-              type="password" 
+          <h1 className="judul-3 mt-6">Dasbor admin</h1>
+          <p className="mt-1 text-[15px] text-sekunder">Masukkan PIN admin untuk membuka data laporan, pelanggan, dan penjualan.</p>
+          <form onSubmit={masukDasbor} className="mt-6">
+            <label htmlFor="pin" className={kelasLabel}>
+              PIN admin
+            </label>
+            <input
+              id="pin"
+              type="password"
+              autoComplete="current-password"
               value={pin}
               onChange={(e) => setPin(e.target.value)}
-              placeholder="••••••" 
-              className={`w-full px-4 py-4 rounded-xl border ${pinError ? 'border-red-300 bg-red-50 text-red-600' : 'border-gray-200 bg-[#F4F7F4] text-gray-900 focus:border-[#1A3626] focus:bg-white focus:ring-4 focus:ring-[#1A3626]/10'} focus:outline-none transition-all text-center tracking-[0.5em] text-2xl mb-4 placeholder:text-gray-400 placeholder:tracking-normal placeholder:font-normal placeholder:text-base font-bold`}
+              aria-invalid={!!pinSalah}
+              aria-describedby={pinSalah ? "pesan-pin" : undefined}
+              className={kelasInput}
               autoFocus
             />
-            <AnimatePresence>
-              {pinError && (
-                <motion.p 
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="text-red-500 text-xs mb-4 font-medium"
-                >
-                  PIN tidak valid, silakan coba lagi.
-                </motion.p>
-              )}
-            </AnimatePresence>
-            <motion.button 
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              type="submit" 
-              className="w-full bg-[#1A3626] text-white py-4 rounded-xl font-semibold hover:bg-[#0c1f13] transition-colors shadow-lg shadow-[#1A3626]/20"
-            >
-              Masuk Dasbor
-            </motion.button>
+            {pinSalah && (
+              <p id="pesan-pin" role="alert" className="mt-2 text-[14px] text-galat">
+                {pinSalah}
+              </p>
+            )}
+            <button type="submit" disabled={memeriksa || !pin} className={kelasTombol("utama", "md", "mt-5 w-full")}>
+              {memeriksa ? "Memeriksa…" : "Masuk"}
+            </button>
           </form>
-          <Link href="/">
-            <p className="mt-8 text-sm text-gray-400 hover:text-gray-900 transition-colors cursor-pointer flex items-center justify-center gap-2 font-medium">
-              <span className="material-symbols-outlined text-[16px]">arrow_back</span>
-              Web Publik
-            </p>
+          <Link href="/" className="tautan mt-6 inline-flex min-h-11 items-center text-[15px]">
+            Kembali ke situs
           </Link>
-        </motion.div>
-      </div>
+        </div>
+      </main>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#F4F7F4] text-gray-900 font-sans pb-20 selection:bg-[#EAC775]/30">
-      
-      {/* Navbar - Interactive, Glassmorphism, Floating effect */}
-      <motion.header 
-        initial={{ y: -100 }}
-        animate={{ y: 0 }}
-        transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-        className="sticky top-0 z-30 pt-4 px-4 md:px-6"
-      >
-        <div className="max-w-7xl mx-auto bg-white/80 backdrop-blur-md px-6 py-4 rounded-2xl shadow-sm border border-white flex flex-col md:flex-row justify-between items-center gap-4">
-          <div className="flex items-center gap-4">
-            <motion.div 
-              whileHover={{ rotate: 180 }}
-              transition={{ duration: 0.4 }}
-              className="w-12 h-12 bg-gradient-to-br from-[#1A3626] to-[#2c573d] rounded-xl flex items-center justify-center shadow-md shadow-[#1A3626]/20"
-            >
-              <span className="material-symbols-outlined text-[#EAC775] text-2xl">dashboard</span>
-            </motion.div>
-            <div>
-              <h1 className="font-bold text-xl text-gray-900 tracking-tight">Admin Patchmos</h1>
-              <p className="text-sm text-gray-500 font-medium flex items-center gap-1 mt-0.5">
-                <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-                Sistem aktif & sinkron
-              </p>
-            </div>
+    <>
+      <header className="sticky top-0 z-40 border-b border-garis bg-white">
+        <div className="wadah flex min-h-16 flex-wrap items-center justify-between gap-3 py-2">
+          <div className="flex items-center gap-3">
+            <Image src="/brand/patchmos-logo-mark.png" alt="" width={894} height={886} className="h-9 w-9" />
+            <p className="text-[17px] font-semibold">Dasbor admin MosqRisk</p>
           </div>
-          <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
-            <motion.button 
-              whileHover={totalSubscribers > 0 ? { scale: 1.05 } : {}}
-              whileTap={totalSubscribers > 0 ? { scale: 0.95 } : {}}
-              onClick={handleBroadcast}
-              disabled={isBroadcasting || totalSubscribers === 0}
-              className={`flex items-center justify-center gap-2 px-6 py-3 rounded-xl text-sm font-semibold transition-all ${totalSubscribers === 0 ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-red-50 text-red-600 hover:bg-red-100 hover:shadow-md hover:shadow-red-100/50'}`}
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              disabled={subscribers.length === 0}
+              onClick={() =>
+                setKonfirmasi({
+                  judul: "Kirim peringatan ke semua pelanggan?",
+                  isi: `Email peringatan kewaspadaan DBD akan dikirim ke ${subscribers.length} pelanggan. Pengiriman belum ditarget per tingkat risiko wilayah.`,
+                  tombol: "Kirim peringatan",
+                  jalankan: kirimPeringatan,
+                })
+              }
+              className={kelasTombol("garis", "sm")}
             >
-              <span className="material-symbols-outlined text-[20px]">
-                {isBroadcasting ? 'hourglass_top' : 'campaign'}
-              </span>
-              {isBroadcasting ? 'Memproses...' : 'Kirim Peringatan'}
-            </motion.button>
-            <Link href="/">
-              <motion.button 
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                className="flex items-center gap-2 px-6 py-3 bg-white hover:bg-gray-50 border border-gray-200 transition-all shadow-sm hover:shadow-md rounded-xl text-sm font-semibold text-gray-700 justify-center w-full sm:w-auto"
-              >
-                Web Publik
-              </motion.button>
+              <MegaphoneIcon size={18} aria-hidden="true" />
+              Kirim peringatan
+            </button>
+            <Link href="/" className={kelasTombol("garis", "sm")}>
+              Situs publik
             </Link>
           </div>
         </div>
-      </motion.header>
+      </header>
 
-      <main className="max-w-7xl mx-auto px-4 md:px-6 mt-8">
-        
-        {/* Stats Cards - Interactive with staggered entry */}
-        <motion.div 
-          variants={containerVariants}
-          initial="hidden"
-          animate="show"
-          className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10"
-        >
-          {/* Card 1 */}
-          <motion.div 
-            variants={itemVariants}
-            whileHover={{ y: -5, scale: 1.02 }}
-            className="bg-white p-6 rounded-3xl shadow-sm hover:shadow-xl hover:shadow-blue-900/5 border border-gray-100 flex items-center gap-5 transition-all cursor-default relative overflow-hidden group"
-          >
-            <div className="absolute -right-4 -top-4 w-24 h-24 bg-blue-50 rounded-full blur-2xl group-hover:bg-blue-100 transition-colors"></div>
-            <div className="w-14 h-14 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 relative z-10 group-hover:scale-110 transition-transform">
-              <span className="material-symbols-outlined text-3xl">description</span>
-            </div>
-            <div className="relative z-10">
-              <p className="text-sm text-gray-500 font-medium mb-1">Total Laporan Masuk</p>
-              <h2 className="text-4xl font-bold text-gray-900 tracking-tight">{loading ? '...' : totalReports}</h2>
-            </div>
-          </motion.div>
-          
-          {/* Card 2 */}
-          <motion.div 
-            variants={itemVariants}
-            whileHover={{ y: -5, scale: 1.02 }}
-            className="bg-white p-6 rounded-3xl shadow-sm hover:shadow-xl hover:shadow-red-900/5 border border-gray-100 flex items-center gap-5 transition-all cursor-default relative overflow-hidden group"
-          >
-            <div className="absolute -right-4 -top-4 w-24 h-24 bg-red-50 rounded-full blur-2xl group-hover:bg-red-100 transition-colors"></div>
-            <div className="w-14 h-14 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center shrink-0 relative z-10 group-hover:scale-110 transition-transform">
-              <span className="material-symbols-outlined text-3xl">health_and_safety</span>
-            </div>
-            <div className="relative z-10">
-              <p className="text-sm text-gray-500 font-medium mb-1">Laporan Suspect DBD</p>
-              <h2 className="text-4xl font-bold text-gray-900 tracking-tight">{loading ? '...' : dbdCases}</h2>
-            </div>
-          </motion.div>
+      <main id="konten" className="flex-1 bg-kertas">
+        <div className="wadah space-y-8 py-8 md:py-10">
+          <dl className="grid grid-cols-2 gap-3 md:grid-cols-4">
+            {ringkas.map(({ label, nilai, Ikon }) => (
+              <div key={label} className="rounded-kartu bg-white px-5 py-4 shadow-tipis">
+                <dt className="flex items-center gap-2 text-[14px] text-sekunder">
+                  <Ikon size={18} weight="duotone" aria-hidden="true" className="text-kemasan" />
+                  {label}
+                </dt>
+                <dd className="angka mt-2 text-[34px] font-extrabold leading-none tracking-[-0.04em]">{memuat ? "…" : nilai.toLocaleString("id-ID")}</dd>
+              </div>
+            ))}
+          </dl>
 
-          {/* Card 3 */}
-          <motion.div 
-            variants={itemVariants}
-            whileHover={{ y: -5, scale: 1.02 }}
-            className="bg-white p-6 rounded-3xl shadow-sm hover:shadow-xl hover:shadow-yellow-900/5 border border-gray-100 flex items-center gap-5 transition-all cursor-default relative overflow-hidden group"
-          >
-            <div className="absolute -right-4 -top-4 w-24 h-24 bg-yellow-50 rounded-full blur-2xl group-hover:bg-yellow-100 transition-colors"></div>
-            <div className="w-14 h-14 rounded-2xl bg-yellow-50 text-yellow-600 flex items-center justify-center shrink-0 relative z-10 group-hover:scale-110 transition-transform">
-              <span className="material-symbols-outlined text-3xl">bug_report</span>
-            </div>
-            <div className="relative z-10">
-              <p className="text-sm text-gray-500 font-medium mb-1">Laporan Jentik</p>
-              <h2 className="text-4xl font-bold text-gray-900 tracking-tight">{loading ? '...' : nyamukCases}</h2>
-            </div>
-          </motion.div>
-        </motion.div>
+          <SalesPanel pin={pin} apiUrl={API_URL} />
 
-        {/* Penjualan online + offline (tabel orders) */}
-        <SalesPanel pin={pin} apiUrl={process.env.NEXT_PUBLIC_API_URL || ''} />
-
-        {/* Global Search Bar - Interactive */}
-        <motion.div 
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-          className="mb-8 relative max-w-2xl group"
-        >
-          <span className="material-symbols-outlined absolute left-5 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-[#1A3626] transition-colors">search</span>
-          <input 
-            type="text" 
-            placeholder="Cari lokasi, isi laporan, atau email warga..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-white border border-gray-200 pl-14 pr-12 py-4 rounded-2xl text-gray-900 font-medium placeholder:text-gray-400 placeholder:font-normal focus:outline-none focus:ring-4 focus:ring-[#1A3626]/5 focus:border-[#1A3626]/30 transition-all shadow-sm hover:shadow-md"
-          />
-          <AnimatePresence>
-            {searchQuery && (
-              <motion.button 
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.8 }}
-                onClick={() => setSearchQuery('')}
-                className="absolute right-4 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center bg-gray-100 hover:bg-gray-200 text-gray-500 rounded-full transition-colors"
+          <div className="relative max-w-xl">
+            <label htmlFor="cari" className="sr-only">
+              Cari laporan atau pelanggan
+            </label>
+            <MagnifyingGlassIcon size={20} aria-hidden="true" className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sekunder" />
+            <input
+              id="cari"
+              type="search"
+              value={cari}
+              onChange={(e) => setCari(e.target.value)}
+              placeholder="Cari lokasi, isi laporan, atau email"
+              className={`${kelasInput} pl-11 pr-11`}
+            />
+            {cari && (
+              <button
+                type="button"
+                onClick={() => setCari("")}
+                aria-label="Hapus pencarian"
+                className="absolute right-1 top-1/2 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center text-sekunder hover:text-tinta"
               >
-                <span className="material-symbols-outlined text-[16px]">close</span>
-              </motion.button>
+                <XIcon size={18} aria-hidden="true" />
+              </button>
             )}
-          </AnimatePresence>
-        </motion.div>
+          </div>
 
-        {/* Stacked Tables with Framer Motion Rows */}
-        <motion.div 
-          variants={containerVariants}
-          initial="hidden"
-          animate="show"
-          className="flex flex-col gap-10"
-        >
-          
-          {/* Data Table Laporan */}
-          <motion.div variants={itemVariants} className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden flex flex-col">
-            <div className="px-8 py-6 border-b border-gray-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white">
-              <div>
-                <h3 className="font-bold text-xl text-gray-900 flex items-center gap-2">
-                  <span className="w-3 h-8 bg-[#EAC775] rounded-full inline-block mr-1"></span>
-                  Laporan Warga
-                </h3>
-                <p className="text-gray-500 text-sm mt-1 ml-6">Data masuk dari pemantauan partisipatif.</p>
-              </div>
-              <ExportButton onClick={() => exportCSV(reports, 'laporan_patchmos.csv')} />
+          {/* Laporan */}
+          <section aria-labelledby="judul-laporan" className="overflow-hidden rounded-kartu bg-white shadow-tipis">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-garis px-5 py-4">
+              <h2 id="judul-laporan" className="text-[18px] font-semibold">
+                Laporan warga <span className="font-normal text-sekunder angka">({laporanTampil.length})</span>
+              </h2>
+              <button type="button" onClick={() => unduhCSV(laporanTampil, "laporan_mosqrisk.csv")} disabled={!laporanTampil.length} className={kelasTombol("garis", "sm")}>
+                <DownloadSimpleIcon size={18} aria-hidden="true" />
+                Ekspor CSV
+              </button>
             </div>
-            
             <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-gray-50/50 text-gray-400 text-xs border-b border-gray-100">
-                    <th className="px-8 py-4 font-semibold uppercase tracking-wider w-1/4">Lokasi & Waktu</th>
-                    <th className="px-8 py-4 font-semibold uppercase tracking-wider w-1/6">Indikator</th>
-                    <th className="px-8 py-4 font-semibold uppercase tracking-wider w-auto">Detail Pengamatan</th>
-                    <th className="px-8 py-4 font-semibold uppercase tracking-wider text-right w-24">Aksi</th>
+              <table className="w-full min-w-[720px] text-left text-[14px]">
+                <thead className="bg-kertas text-sekunder">
+                  <tr>
+                    <th scope="col" className="px-5 py-3 font-medium">Waktu</th>
+                    <th scope="col" className="px-5 py-3 font-medium">Jenis</th>
+                    <th scope="col" className="px-5 py-3 font-medium">Lokasi</th>
+                    <th scope="col" className="px-5 py-3 font-medium">Deskripsi</th>
+                    <th scope="col" className="px-5 py-3 text-right font-medium">Aksi</th>
                   </tr>
                 </thead>
-                <tbody className="text-sm">
-                  <AnimatePresence mode="popLayout">
-                    {loading && (
-                      <motion.tr exit={{ opacity: 0 }}>
-                        <td colSpan={4} className="p-16 text-center text-gray-400 font-medium">Memuat data dari server...</td>
-                      </motion.tr>
-                    )}
-                    {!loading && filteredReports.length === 0 && (
-                      <motion.tr initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                        <td colSpan={4} className="p-16 text-center text-gray-400 font-medium">
-                          {searchQuery ? "Tidak ada laporan yang sesuai pencarian." : "Belum ada laporan dari warga."}
+                <tbody>
+                  {memuat ? (
+                    <tr>
+                      <td colSpan={5} className="px-5 py-8 text-center text-sekunder">Memuat laporan…</td>
+                    </tr>
+                  ) : laporanTampil.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="px-5 py-8 text-center text-sekunder">{q ? "Tidak ada laporan yang cocok." : "Belum ada laporan warga."}</td>
+                    </tr>
+                  ) : (
+                    laporanTampil.map((r) => (
+                      <tr key={r.id} className="border-t border-garis align-top">
+                        <td className="whitespace-nowrap px-5 py-3 angka">{waktu(r.created_at)}</td>
+                        <td className="whitespace-nowrap px-5 py-3">
+                          <span className={r.report_type === "DBD" ? "font-semibold text-galat" : ""}>{LABEL_JENIS[r.report_type ?? ""] ?? r.report_type}</span>
                         </td>
-                      </motion.tr>
-                    )}
-                    {!loading && filteredReports.map((r) => (
-                      <motion.tr 
-                        key={r.id} 
-                        layout
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, x: -20, transition: { duration: 0.2 } }}
-                        className="border-b border-gray-50 hover:bg-[#F4F7F4]/50 transition-colors group"
-                      >
-                        <td className="px-8 py-5 align-top">
-                          <div className="font-semibold text-gray-900 mb-1 leading-snug group-hover:text-[#1A3626] transition-colors">{r.location_name}</div>
-                          <div className="text-xs text-gray-400 font-medium flex items-center gap-1.5">
-                            <span className="material-symbols-outlined text-[14px]">history</span>
-                            {new Date(r.created_at).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}
-                          </div>
+                        <td className="px-5 py-3">{r.location_name}</td>
+                        <td className="max-w-[28rem] px-5 py-3 text-sekunder">{r.description}</td>
+                        <td className="px-5 py-2 text-right">
+                          <button
+                            type="button"
+                            aria-label={`Hapus laporan ${r.id}`}
+                            onClick={() =>
+                              setKonfirmasi({
+                                judul: "Hapus laporan ini?",
+                                isi: "Laporan dihapus permanen dari database dan tidak bisa dikembalikan.",
+                                tombol: "Hapus laporan",
+                                jalankan: () => hapusLaporan(r.id),
+                              })
+                            }
+                            className="inline-flex h-11 w-11 items-center justify-center rounded-full text-sekunder transition-colors hover:bg-risiko-tinggi-latar hover:text-galat"
+                          >
+                            <TrashIcon size={20} aria-hidden="true" />
+                          </button>
                         </td>
-                        <td className="px-8 py-5 align-top">
-                          {r.report_type?.toUpperCase() === 'DBD' ? (
-                            <span className="inline-flex items-center gap-1.5 bg-red-50 text-red-600 px-3 py-1.5 rounded-lg text-xs font-semibold border border-red-100 shadow-sm">
-                              <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span> Kasus DBD
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1.5 bg-yellow-50 text-yellow-700 px-3 py-1.5 rounded-lg text-xs font-semibold border border-yellow-100 shadow-sm">
-                              <span className="w-1.5 h-1.5 rounded-full bg-yellow-500"></span> Nyamuk
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-8 py-5 align-top text-gray-600 leading-relaxed max-w-md">
-                          {r.description || <span className="text-gray-300 italic">Tidak ada deskripsi</span>}
-                        </td>
-                        <td className="px-8 py-5 align-top text-right">
-                          <div className="opacity-0 group-hover:opacity-100 transition-opacity flex justify-end">
-                            <DeleteButton onClick={() => handleDeleteReport(r.id)} title="Hapus Laporan" />
-                          </div>
-                        </td>
-                      </motion.tr>
-                    ))}
-                  </AnimatePresence>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
-          </motion.div>
+          </section>
 
-          {/* Subscribers Table */}
-          <motion.div variants={itemVariants} className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden flex flex-col mb-10">
-            <div className="px-8 py-6 border-b border-gray-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white">
-              <div>
-                <h3 className="font-bold text-xl text-gray-900 flex items-center gap-2">
-                  <span className="w-3 h-8 bg-[#1A3626] rounded-full inline-block mr-1"></span>
-                  Basis Data Pelanggan
-                </h3>
-                <p className="text-gray-500 text-sm mt-1 ml-6">Warga yang berlangganan Peringatan Dini.</p>
-              </div>
-              <ExportButton onClick={() => exportCSV(subscribers, 'leads_patchmos.csv')} />
+          {/* Pelanggan */}
+          <section aria-labelledby="judul-pelanggan" className="overflow-hidden rounded-kartu bg-white shadow-tipis">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-garis px-5 py-4">
+              <h2 id="judul-pelanggan" className="text-[18px] font-semibold">
+                Pelanggan email <span className="font-normal text-sekunder angka">({pelangganTampil.length})</span>
+              </h2>
+              <button type="button" onClick={() => unduhCSV(pelangganTampil, "pelanggan_mosqrisk.csv")} disabled={!pelangganTampil.length} className={kelasTombol("garis", "sm")}>
+                <DownloadSimpleIcon size={18} aria-hidden="true" />
+                Ekspor CSV
+              </button>
             </div>
-            
             <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-gray-50/50 text-gray-400 text-xs border-b border-gray-100">
-                    <th className="px-8 py-4 font-semibold uppercase tracking-wider w-1/3">Alamat Email</th>
-                    <th className="px-8 py-4 font-semibold uppercase tracking-wider w-1/2">Lokasi Terdaftar</th>
-                    <th className="px-8 py-4 font-semibold uppercase tracking-wider text-right w-24">Aksi</th>
+              <table className="w-full min-w-[600px] text-left text-[14px]">
+                <thead className="bg-kertas text-sekunder">
+                  <tr>
+                    <th scope="col" className="px-5 py-3 font-medium">Email</th>
+                    <th scope="col" className="px-5 py-3 font-medium">Wilayah</th>
+                    <th scope="col" className="px-5 py-3 font-medium">Terdaftar</th>
+                    <th scope="col" className="px-5 py-3 text-right font-medium">Aksi</th>
                   </tr>
                 </thead>
-                <tbody className="text-sm">
-                  <AnimatePresence mode="popLayout">
-                    {loading && (
-                      <motion.tr exit={{ opacity: 0 }}>
-                        <td colSpan={3} className="p-16 text-center text-gray-400 font-medium">Memuat data dari server...</td>
-                      </motion.tr>
-                    )}
-                    {!loading && filteredSubscribers.length === 0 && (
-                      <motion.tr initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                        <td colSpan={3} className="p-16 text-center text-gray-400 font-medium">
-                          {searchQuery ? "Tidak ada pelanggan yang sesuai pencarian." : "Belum ada pelanggan notifikasi."}
+                <tbody>
+                  {memuat ? (
+                    <tr>
+                      <td colSpan={4} className="px-5 py-8 text-center text-sekunder">Memuat pelanggan…</td>
+                    </tr>
+                  ) : pelangganTampil.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} className="px-5 py-8 text-center text-sekunder">{q ? "Tidak ada pelanggan yang cocok." : "Belum ada pelanggan email."}</td>
+                    </tr>
+                  ) : (
+                    pelangganTampil.map((s) => (
+                      <tr key={s.id} className="border-t border-garis">
+                        <td className="break-all px-5 py-3">{s.email}</td>
+                        <td className="px-5 py-3">{s.location_name}</td>
+                        <td className="whitespace-nowrap px-5 py-3 angka">{waktu(s.created_at)}</td>
+                        <td className="px-5 py-2 text-right">
+                          <button
+                            type="button"
+                            aria-label={`Hapus pelanggan ${s.email}`}
+                            onClick={() =>
+                              setKonfirmasi({
+                                judul: "Hapus pelanggan ini?",
+                                isi: `${s.email} tidak akan menerima email MosqRisk lagi. Data dihapus permanen.`,
+                                tombol: "Hapus pelanggan",
+                                jalankan: () => hapusPelanggan(s.id),
+                              })
+                            }
+                            className="inline-flex h-11 w-11 items-center justify-center rounded-full text-sekunder transition-colors hover:bg-risiko-tinggi-latar hover:text-galat"
+                          >
+                            <TrashIcon size={20} aria-hidden="true" />
+                          </button>
                         </td>
-                      </motion.tr>
-                    )}
-                    {!loading && filteredSubscribers.map((s) => (
-                      <motion.tr 
-                        key={s.id} 
-                        layout
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, x: -20, transition: { duration: 0.2 } }}
-                        className="border-b border-gray-50 hover:bg-[#F4F7F4]/50 transition-colors group"
-                      >
-                        <td className="px-8 py-5 align-middle">
-                          <div className="inline-flex items-center gap-3 bg-gray-50 px-4 py-2 rounded-xl border border-gray-100 group-hover:bg-white group-hover:border-gray-200 transition-all">
-                            <span className="material-symbols-outlined text-[#EAC775] text-lg">mail</span>
-                            <span className="text-gray-900 font-semibold tracking-wide">{s.email}</span>
-                          </div>
-                        </td>
-                        <td className="px-8 py-5 align-middle">
-                          <div className="font-semibold text-gray-900 mb-1 group-hover:text-[#1A3626] transition-colors">{s.location_name}</div>
-                          <div className="text-xs text-gray-400 font-medium flex items-center gap-1.5">
-                            <span className="material-symbols-outlined text-[14px]">event_available</span>
-                            Bergabung: {new Date(s.created_at).toLocaleString('id-ID', { dateStyle: 'long' })}
-                          </div>
-                        </td>
-                        <td className="px-8 py-5 align-middle text-right">
-                          <div className="opacity-0 group-hover:opacity-100 transition-opacity flex justify-end">
-                            <DeleteButton onClick={() => handleDeleteSubscriber(s.id)} title="Hapus Pelanggan" />
-                          </div>
-                        </td>
-                      </motion.tr>
-                    ))}
-                  </AnimatePresence>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
-          </motion.div>
-          
-        </motion.div>
+          </section>
+        </div>
       </main>
-    </div>
+
+      <Dialog terbuka={!!konfirmasi} onTutup={() => !menjalankan && setKonfirmasi(null)} judul={konfirmasi?.judul ?? ""}>
+        {konfirmasi && (
+          <div>
+            <p className="text-[16px] leading-relaxed">{konfirmasi.isi}</p>
+            <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <button type="button" onClick={() => setKonfirmasi(null)} disabled={menjalankan} className={kelasTombol("garis")}>
+                Batal
+              </button>
+              <button type="button" onClick={() => void jalankanKonfirmasi()} disabled={menjalankan} className={kelasTombol("utama")}>
+                {menjalankan ? "Memproses…" : konfirmasi.tombol}
+              </button>
+            </div>
+          </div>
+        )}
+      </Dialog>
+    </>
   );
 }

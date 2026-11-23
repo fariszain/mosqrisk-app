@@ -9,11 +9,14 @@ import requests
 from datetime import date, datetime, timedelta, timezone
 import hashlib
 import hmac
+import json
+import math
 import os
 import re
 import uuid
+from pathlib import Path
 from typing import Literal, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -48,11 +51,40 @@ snap = midtransclient.Snap(
 # ─── PRODUK & HARGA ───
 # TODO: harga SEMENTARA Rp20.000/botol (keputusan tim 2026-11-06); harga final diputuskan
 # minggu berikutnya — konfirmasi ke tim sebelum expo.
-# Ini SATU-SATUNYA sumber harga: frontend membacanya lewat GET /api/produk, dan total
+# SATU-SATUNYA sumber harga: backend/produk.json. File yang sama dibaca frontend/next.config.ts
+# saat build, jadi harga tetap tampil walau backend sedang tidak bisa dihubungi. Total
 # pembayaran selalu dihitung di server (jumlah × harga), tidak pernah diambil dari browser.
-HARGA_PER_BOTOL = 20000
-MAKS_BOTOL_PER_PESANAN = 20
-NAMA_PRODUK = "Patchmos Spray 50 mL"
+# Kalau file hilang/rusak (mis. lupa ikut di-commit, salah ketik JSON), HANYA penjualan yang ditutup
+# (503) — skor risiko, laporan, klaim, dan admin lain tetap jalan. Tidak ada angka harga cadangan.
+try:
+    _PRODUK = json.loads(Path(__file__).with_name("produk.json").read_text(encoding="utf-8"))
+    HARGA_PER_BOTOL = int(_PRODUK["harga_per_botol"])
+    MAKS_BOTOL_PER_PESANAN = int(_PRODUK["maks_botol_per_pesanan"])
+    NAMA_PRODUK = str(_PRODUK["nama"])
+    if HARGA_PER_BOTOL <= 0 or MAKS_BOTOL_PER_PESANAN <= 0 or not NAMA_PRODUK.strip():
+        raise ValueError("harga, batas pesanan, dan nama wajib diisi")
+    # Pilihan pengiriman + ongkir (rupiah). Tanpa blok "pengiriman" = perilaku lama: hanya diantar,
+    # tanpa ongkir yang ditagih lewat web.
+    PENGIRIMAN = {}
+    for _kode, _opsi in (_PRODUK.get("pengiriman") or {"antar": {"label": "Diantar", "ongkir": 0}}).items():
+        if _kode not in ("antar", "ambil"):
+            continue
+        _ongkir = int(_opsi.get("ongkir", 0))
+        if _ongkir < 0 or not str(_opsi.get("label", "")).strip():
+            raise ValueError(f"opsi pengiriman '{_kode}' tidak valid")
+        PENGIRIMAN[_kode] = {"label": str(_opsi["label"]), "keterangan": str(_opsi.get("keterangan", "")), "ongkir": _ongkir}
+    if not PENGIRIMAN:
+        raise ValueError("minimal satu opsi pengiriman (antar/ambil)")
+except Exception as e:
+    print(f"PERINGATAN: backend/produk.json tidak valid ({e}). Checkout & pencatatan penjualan dinonaktifkan.")
+    HARGA_PER_BOTOL = None
+    MAKS_BOTOL_PER_PESANAN = 1
+    NAMA_PRODUK = "Patchmos Spray"
+    PENGIRIMAN = {}
+PESAN_PRODUK_TIDAK_SIAP = "Harga produk belum dikonfigurasi di server. Pembayaran sementara tidak tersedia."
+
+def respons_produk_tidak_siap():
+    return JSONResponse(status_code=503, content={"success": False, "message": PESAN_PRODUK_TIDAK_SIAP})
 SITE_URL = os.environ.get("SITE_URL", "https://mosqrisk-app.vercel.app").rstrip("/")
 
 app = FastAPI(title="MosqRisk Backend API")
@@ -84,11 +116,19 @@ class ClaimRequest(BaseModel):
 class PaymentRequest(BaseModel):
     name: str = Field(min_length=2, max_length=80)
     phone: str = Field(min_length=8, max_length=20, pattern=r"^\+?[0-9][0-9 \-]{6,18}$")
-    address: str = Field(min_length=10, max_length=400)
+    # Wajib (min. 10 karakter) kalau diantar; boleh kosong kalau ambil sendiri.
+    address: Optional[str] = Field(default=None, max_length=400)
+    delivery: Literal["antar", "ambil"] = "antar"
     quantity: int = Field(ge=1, le=MAKS_BOTOL_PER_PESANAN)
-    # Total yang dilihat pembeli di layar. Kalau berbeda dengan hitungan server
+    # Total yang dilihat pembeli di layar (termasuk ongkir). Kalau berbeda dengan hitungan server
     # (mis. harga baru saja diganti), transaksi ditolak supaya pembeli tidak kaget.
     expectedTotal: Optional[int] = None
+
+    @model_validator(mode="after")
+    def alamat_wajib_kalau_diantar(self):
+        if self.delivery == "antar" and len((self.address or "").strip()) < 10:
+            raise ValueError("Alamat pengiriman wajib diisi (minimal 10 karakter).")
+        return self
 
 class PaymentStatusRequest(BaseModel):
     orderId: str = Field(pattern=r"^MOSQ-\d{14}-[0-9a-f]{8}$")
@@ -127,61 +167,175 @@ def verify_admin(credentials: HTTPAuthorizationCredentials = Depends(security)):
 # API Endpoint JSON Publik BMKG
 BASE_URL = "https://api.bmkg.go.id/publik/prakiraan-cuaca?adm4="
 
-def calculate_mosquito_risk(temp, humidity, precipitation=0.0):
-    import math
-    
-    # ─── FAKTOR 1: SUHU (Bobot 40%) — Gaussian Asimetris ───
-    # Konsisten dengan formula bulanan (titik optimal 28.0°C)
-    temp_score = 0
-    if temp is not None:
-        optimal_temp = 28.0
-        sigma = 5.0 if temp <= optimal_temp else 2.5
-        temp_score = math.exp(-0.5 * ((temp - optimal_temp) / sigma) ** 2) * 40
+# ─── MODEL RISIKO MOSQRISK v4 (2026-11-07) ───
+# SATU-SATUNYA sumber parameter: backend/rumus_risiko.json (dibaca juga oleh frontend saat build
+# untuk simulator & grafik di /edukasi).
+#
+#   Indeks = 100 × S_suhu × S_kelembapan × S_hujan        (tiap S bernilai 0–1)
+#
+# Bentuknya PERKALIAN, mengikuti rumus angka penularan R0 (Ross–Macdonald) yang dipakai
+# Mordecai dkk. (2017): kalau satu syarat nol (mis. terlalu dingin untuk virus berkembang),
+# penularan nol walau syarat lain ideal. Rumus poin yang DIJUMLAH (v1–v3) keliru di sini:
+# 10 °C + lembap + hujan tetap dapat skor "Sedang".
+#   S_suhu      = R0(T) Aedes aegypti × DENV, dinormalkan ke puncaknya (±29 °C). Persamaan (1)
+#                 Mordecai dkk. 2017, parameter 8 kurva sifat nyamuk/virus dari S2 Text Tabel B.
+#   S_kelembapan, S_hujan = pengali garis lurus antartitik — ASUMSI tim (arah pengaruh dari
+#                 Schmidt dkk. 2018 dan Benedum dkk. 2018), ditulis terbuka di /edukasi.
+# Kategori: TINGGI ≥ 75, SEDANG 50–74, RENDAH < 50 (keputusan tim).
+#
+# Riwayat:
+#   v3 (07-11-2026 siang): poin dijumlah — suhu 40 (garis 18→26–29→34 °C), kelembapan 25
+#     (40→80%), hujan 35 (0 mm = 10, 5–50 mm = 35, 100 mm = 20). Rata-rata harian.
+#   v2 (sebelumnya): suhu Gaussian asimetris optimum 28 °C × 40; kelembapan ≥ 80% = 25,
+#     60–80% linear, < 60% = (RH/60) × 10 (lompatan di 60%); hujan 0 mm = 10, 0,5–20 mm = 35,
+#     20–35 mm = 20, selain itu 5; skor minimum 5; dari SATU record BMKG per 3 jam terdekat.
+#   Tabel di slide PIKU (suhu 40/25/10, kelembapan 30/20/10, hujan 30/15/10) tidak pernah
+#     dipakai di kode dan sumbernya tidak diketahui.
 
-    # ─── FAKTOR 2: KELEMBAPAN (Bobot 25%) — Linear bertahap ───
-    # Konsisten dengan formula bulanan
-    hum_score = 0
-    if humidity is not None:
-        if humidity >= 80:
-            hum_score = 25
-        elif humidity >= 60:
-            hum_score = ((humidity - 60) / 20) * 25
-        else:
-            hum_score = max(0, (humidity / 60)) * 10
-            
-    # ─── FAKTOR 3: CURAH HUJAN HARIAN (Bobot 35%) ───
-    # Berbeda dengan tren bulanan (yang butuh 150-300mm/bulan),
-    # data BMKG ini adalah hujan HARIAN. 
-    # Hujan rintik/sedang (1 - 15 mm/hari) sangat ideal membuat genangan.
-    # Hujan lebat (>30 mm/hari) justru menghanyutkan jentik (flushing effect).
-    precip_score = 0
-    if precipitation is not None:
-        if precipitation == 0:
-            precip_score = 10  # Kering, genangan lama mungkin masih ada tapi tidak bertambah
-        elif 0.5 <= precipitation <= 20:
-            precip_score = 35  # Ideal
-        elif 20 < precipitation <= 35:
-            precip_score = 20  # Mulai terlalu lebat
-        else:
-            precip_score = 5   # Flushing effect kuat
-            
-    score = int(round(temp_score + hum_score + precip_score))
-    score = min(max(score, 5), 100)
-    
-    category = "TINGGI" if score >= 75 else "SEDANG" if score >= 50 else "RENDAH"
-    return score, category
+def _nilai_sifat(s, T):
+    """Kurva termal satu sifat: Brière c·T·(T−T0)·√(Tm−T) atau kuadrat c·(T−T0)·(Tm−T); 0 di luar (T0, Tm)."""
+    T0, Tm, c = s["T0"], s["Tm"], s["c"]
+    if T <= T0 or T >= Tm:
+        return 0.0
+    if s["fungsi"] == "briere":
+        return c * T * (T - T0) * math.sqrt(Tm - T)
+    return c * (T - T0) * (Tm - T)
+
+def r0_mentah(sifat, T):
+    """Persamaan (1) Mordecai dkk. 2017 tanpa N dan r (konstan, hilang saat dinormalkan)."""
+    v = {k: _nilai_sifat(s, T) for k, s in sifat.items()}
+    if min(v.values()) <= 0:
+        return 0.0
+    mu = 1.0 / v["lf"]
+    return math.sqrt(v["a"] ** 2 * v["b"] * v["c"] * math.exp(-mu / v["PDR"]) * v["EFD"] * v["pEA"] * v["MDR"] / mu ** 3)
+
+def _cek_titik(titik, nama):
+    if len(titik) < 2 or any(q[0] <= p[0] for p, q in zip(titik, titik[1:])):
+        raise ValueError(f"titik {nama} harus ≥ 2 dan nilai x-nya naik")
+    if any(not 0 <= y <= 1 for _, y in titik):
+        raise ValueError(f"pengali {nama} harus 0–1")
+
+try:
+    RUMUS = json.loads(Path(__file__).with_name("rumus_risiko.json").read_text(encoding="utf-8"))
+    SIFAT_SUHU = RUMUS["faktor"]["suhu"]["sifat"]
+    if set(SIFAT_SUHU) != {"a", "EFD", "pEA", "MDR", "lf", "b", "c", "PDR"}:
+        raise ValueError("sifat suhu harus a, EFD, pEA, MDR, lf, b, c, PDR")
+    _cek_titik(RUMUS["faktor"]["kelembapan"]["titik"], "kelembapan")
+    _cek_titik(RUMUS["faktor"]["hujan"]["titik"], "hujan")
+    _cek_titik(RUMUS["bulanan"]["hujan"]["titik"], "hujan bulanan")
+    # Puncak R0 dicari sekali (langkah 0,01 °C) untuk menormalkan S_suhu ke 0–1.
+    R0_PUNCAK = max(r0_mentah(SIFAT_SUHU, i / 100) for i in range(500, 4500))
+    if R0_PUNCAK <= 0:
+        raise ValueError("kurva suhu tidak punya puncak")
+    AMBANG_TINGGI = float(RUMUS["kategori"]["tinggi"])
+    AMBANG_SEDANG = float(RUMUS["kategori"]["sedang"])
+except Exception as e:
+    # Fail closed hanya untuk skor risiko (503) — klaim, laporan, checkout, admin tetap jalan.
+    print(f"PERINGATAN: backend/rumus_risiko.json tidak valid ({e}). Skor risiko dinonaktifkan.")
+    RUMUS = None
+PESAN_RUMUS_TIDAK_SIAP = "Rumus risiko belum dikonfigurasi di server."
+
+def interpolasi(titik, x):
+    """Garis lurus antartitik [(x, nilai), ...]; di luar rentang, nilai = titik terdekat."""
+    if x <= titik[0][0]:
+        return float(titik[0][1])
+    for (x0, y0), (x1, y1) in zip(titik, titik[1:]):
+        if x <= x1:
+            return y0 + (y1 - y0) * (x - x0) / (x1 - x0)
+    return float(titik[-1][1])
+
+def s_suhu(temp):
+    return r0_mentah(SIFAT_SUHU, temp) / R0_PUNCAK
+
+def nilai_faktor(temp, humidity, precipitation=0.0, titik_hujan=None):
+    """Pengali 0–1 tiap faktor (S_suhu, S_kelembapan, S_hujan). Data kosong = pengali netral 1,
+    kecuali suhu (tanpa suhu tidak ada skor — 0). Dikirim apa adanya ke frontend (risk_factors)."""
+    f = RUMUS["faktor"]
+    su = s_suhu(temp) if temp is not None else 0.0
+    ke = interpolasi(f["kelembapan"]["titik"], humidity) if humidity is not None else 1.0
+    hu = interpolasi(titik_hujan or f["hujan"]["titik"], precipitation) if precipitation is not None else 1.0
+    return su, ke, hu
+
+def kategori_risiko(score):
+    return "TINGGI" if score >= AMBANG_TINGGI else "SEDANG" if score >= AMBANG_SEDANG else "RENDAH"
+
+def bulatkan(x):
+    # Pembulatan biasa (0,5 ke atas) — sama dengan Math.round di simulator /edukasi.
+    # round() bawaan Python memakai pembulatan bankir (74,5 → 74), jadi tidak dipakai.
+    return int(math.floor(x + 0.5))
+
+def indeks_risiko(su, ke, hu):
+    score = min(max(bulatkan(100 * su * ke * hu), 0), 100)
+    return score, kategori_risiko(score)
+
+def calculate_mosquito_risk(temp, humidity, precipitation=0.0):
+    return indeks_risiko(*nilai_faktor(temp, humidity, precipitation))
+
+def ringkas_hari(records):
+    """Rata-rata suhu & kelembapan, total hujan, dan suhu min/maks dari record BMKG per 3 jam satu hari."""
+    t = [float(x["t"]) for x in records if x.get("t") is not None]
+    h = [float(x["hu"]) for x in records if x.get("hu") is not None]
+    p = [float(x["tp"]) for x in records if x.get("tp") is not None]
+    return {
+        "suhu": round(sum(t) / len(t), 1) if t else None,
+        "kelembapan": round(sum(h) / len(h), 1) if h else None,
+        "hujan": round(sum(p), 1) if p else 0.0,
+        "suhu_min": min(t) if t else None,
+        "suhu_maks": max(t) if t else None,
+        "records": len(records),
+    }
+
+def cuaca_dominan(records):
+    """Satu deskripsi cuaca untuk ikon harian: hujan/petir menang, selain itu yang paling sering."""
+    desc = [str(x.get("weather_desc") or "") for x in records if x.get("weather_desc")]
+    if not desc:
+        return None
+    basah = [d for d in desc if "hujan" in d.lower() or "petir" in d.lower()]
+    if basah:
+        return max(set(basah), key=basah.count)
+    return max(set(desc), key=desc.count)
+
+_OFFSET_ZONA = {"Asia/Jakarta": 7, "Asia/Pontianak": 7, "Asia/Makassar": 8, "Asia/Jayapura": 9}
+
+def tanggal_lokal_sekarang(zona):
+    """Tanggal hari ini (YYYY-MM-DD) di zona waktu wilayah BMKG, tanpa bergantung pada tzdata."""
+    jam = _OFFSET_ZONA.get(zona or "", 7)
+    return (datetime.now(timezone.utc) + timedelta(hours=jam)).strftime("%Y-%m-%d")
+
+def pilih_record_terdekat(cuaca_lists):
+    """Pilih record prakiraan BMKG (per 3 jam) yang waktunya paling dekat dengan sekarang.
+    Mengembalikan (indeks_hari, record). Cadangan: record pertama hari pertama."""
+    sekarang = datetime.now(timezone.utc)
+    terbaik, idx_terbaik, selisih_min = None, 0, None
+    for idx, hari in enumerate(cuaca_lists):
+        for item in hari or []:
+            waktu = item.get('utc_datetime') or item.get('datetime') or ''
+            try:
+                t = datetime.strptime(waktu.replace('T', ' ').replace('Z', '')[:19], "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
+            except ValueError:
+                continue
+            selisih = abs((t - sekarang).total_seconds())
+            if selisih_min is None or selisih < selisih_min:
+                terbaik, idx_terbaik, selisih_min = item, idx, selisih
+    if terbaik is None:
+        return 0, cuaca_lists[0][0]
+    return idx_terbaik, terbaik
 
 # Simple In-Memory Cache
 weather_cache = {}
 CACHE_EXPIRY = 3600  # 1 hour
 
 def fetch_city_weather(adm4_code):
+    """Ambil prakiraan BMKG satu desa/kelurahan → (ringkasan, None) atau (None, pesan_galat).
+
+    Ringkasan: cuaca "sekarang" (record per 3 jam terdekat), ringkasan HARI INI menurut tanggal
+    lokal wilayah (dasar skor), dan ringkasan tiap hari prakiraan (tren 3 hari)."""
     now = datetime.now().timestamp()
     if adm4_code in weather_cache:
         cached_data, timestamp = weather_cache[adm4_code]
         if now - timestamp < CACHE_EXPIRY:
             return cached_data
-            
+
     try:
         headers = {'User-Agent': 'MosqRisk-Engine/1.0'}
         response = requests.get(f"{BASE_URL}{adm4_code}", headers=headers, timeout=10)
@@ -191,28 +345,26 @@ def fetch_city_weather(adm4_code):
             try:
                 cuaca_lists = data.get('data', [{}])[0].get('cuaca', [])
                 if not cuaca_lists or not cuaca_lists[0]:
-                    return None, None, None, None, None, None, "Data cuaca kosong dari BMKG"
-                
-                # Ekstrak data saat ini (hari ini, record pertama)
-                current_weather = cuaca_lists[0][0]
-                temp = float(current_weather.get('t', 0))
-                humidity = float(current_weather.get('hu', 0))
-                
-                # Lokasi koordinat
-                lat = data.get('lokasi', {}).get('lat', 0)
-                lon = data.get('lokasi', {}).get('lon', 0)
-                
-                # Total curah hujan untuk hari ini (menjumlahkan semua nilai 'tp' di array cuaca_lists[0])
-                precipitation = round(sum(float(item.get('tp', 0)) for item in cuaca_lists[0] if item.get('tp') is not None), 1)
-                
-                # Kalkulasi trend 3 hari
+                    return None, "Data cuaca kosong dari BMKG"
+
+                lokasi = data.get('lokasi', {}) or {}
+                # Cuaca "sekarang": record prakiraan yang waktunya paling dekat dengan sekarang.
+                idx_hari, current_weather = pilih_record_terdekat(cuaca_lists)
+
+                # Dasar skor = daftar record HARI INI menurut tanggal lokal wilayah. Menjelang tengah malam
+                # daftar hari ini bisa sudah habis — cadangannya daftar milik record terdekat.
+                tanggal_hari_ini = tanggal_lokal_sekarang(lokasi.get('timezone'))
+                idx_dasar = next(
+                    (i for i, hari in enumerate(cuaca_lists) if hari and str(hari[0].get('local_datetime', ''))[:10] == tanggal_hari_ini),
+                    idx_hari,
+                )
+
+                # Ringkasan per hari (tren 3 hari) — rumus yang sama dengan skor utama.
                 trend = []
                 hari_indo = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"]
-                
                 for daily_data in cuaca_lists:
                     if not daily_data:
                         continue
-                        
                     # Ambil record pertama untuk patokan tanggal
                     dt_str = daily_data[0].get('local_datetime')
                     if dt_str:
@@ -220,66 +372,108 @@ def fetch_city_weather(adm4_code):
                         day_name = hari_indo[dt_obj.isoweekday() % 7]
                     else:
                         day_name = "?"
-                        
-                    temps = [float(item.get('t', 0)) for item in daily_data if item.get('t') is not None]
-                    humidities = [float(item.get('hu', 0)) for item in daily_data if item.get('hu') is not None]
-                    precips = [float(item.get('tp', 0)) for item in daily_data if item.get('tp') is not None]
-                    
-                    avg_temp = sum(temps) / len(temps) if temps else 0
-                    avg_hu = sum(humidities) / len(humidities) if humidities else 0
-                    sum_precip = sum(precips) if precips else 0
-                    
-                    score, _ = calculate_mosquito_risk(avg_temp, avg_hu, sum_precip)
+                    r = ringkas_hari(daily_data)
+                    score, kategori = calculate_mosquito_risk(r["suhu"], r["kelembapan"], r["hujan"])
                     trend.append({
                         "day": day_name,
-                        "risk_score": score
+                        "date": dt_str[:10] if dt_str else None,
+                        "risk_score": score,
+                        "risk_status": kategori,
+                        # Jumlah record prakiraan per 3 jam yang dirata-rata. Hari ini & hari terakhir sering
+                        # belum lengkap (mis. 3 dari 8 record) — frontend memberi catatan untuk itu.
+                        "records": r["records"],
+                        "temperature_celsius": r["suhu"],
+                        "temperature_min": r["suhu_min"],
+                        "temperature_max": r["suhu_maks"],
+                        "humidity_percent": r["kelembapan"],
+                        "precipitation_mm": r["hujan"],
+                        "weather_desc": cuaca_dominan(daily_data),
                     })
-                    
-                result = (temp, humidity, precipitation, lat, lon, trend, None)
+
+                dasar = ringkas_hari(cuaca_lists[idx_dasar])
+                hasil = {
+                    "hari_ini": {**dasar, "tanggal": str(cuaca_lists[idx_dasar][0].get('local_datetime', ''))[:10] or None},
+                    "sekarang": {
+                        "waktu": current_weather.get('local_datetime'),
+                        "suhu": current_weather.get('t'),
+                        "kelembapan": current_weather.get('hu'),
+                        "cuaca": current_weather.get('weather_desc'),
+                        "analysis_date": current_weather.get('analysis_date'),
+                    },
+                    "lat": lokasi.get('lat', 0),
+                    "lon": lokasi.get('lon', 0),
+                    "timezone": lokasi.get('timezone'),
+                    "location": {k: lokasi.get(k) for k in ("provinsi", "kotkab", "kecamatan", "desa")},
+                    "trend": trend,
+                }
+                result = (hasil, None)
                 weather_cache[adm4_code] = (result, now)
                 return result
             except Exception as e:
                 print(f"Struktur JSON tidak terduga untuk kode {adm4_code}: {e}")
-                return None, None, None, None, None, None, f"JSON parse error: {str(e)}"
+                return None, f"JSON parse error: {str(e)}"
         else:
             print(f"Gagal akses API untuk kode {adm4_code}. Status: {response.status_code}")
-            return None, None, None, None, None, None, f"API Error: HTTP {response.status_code}"
+            return None, f"API Error: HTTP {response.status_code}"
     except Exception as e:
         print(f"Error koneksi ke BMKG: {e}")
-        return None, None, None, None, None, None, f"Network Error: {str(e)}"
+        return None, f"Network Error: {str(e)}"
 
 @app.get("/api/mosqrisk")
 async def get_mosqrisk_data(adm4: str = Query(..., description="Kode ADM4 BPS (contoh: 11.71.03.2001)")):
     """Endpoint utama untuk menarik skor risiko nyamuk berdasarkan kode adm4 wilayah"""
-    temp, humidity, precipitation, lat, lon, trend, err_msg = fetch_city_weather(adm4)
+    if RUMUS is None:
+        return JSONResponse(status_code=503, content={"success": False, "error": PESAN_RUMUS_TIDAK_SIAP})
+    hasil, err_msg = fetch_city_weather(adm4)
 
-    if temp is not None and humidity is not None:
-        risk_score, risk_status = calculate_mosquito_risk(temp, humidity, precipitation)
+    if hasil and hasil["hari_ini"]["suhu"] is not None and hasil["hari_ini"]["kelembapan"] is not None:
+        h = hasil["hari_ini"]
+        n_suhu, n_lembap, n_hujan = nilai_faktor(h["suhu"], h["kelembapan"], h["hujan"])
+        risk_score, risk_status = indeks_risiko(n_suhu, n_lembap, n_hujan)
+        sekarang = hasil["sekarang"]
         return {
             "success": True,
             "data": {
-                "temperature_celsius": temp,
-                "humidity_percent": humidity,
-                "precipitation_mm": precipitation,
-                "lat": lat,
-                "lon": lon,
+                # Dasar skor: rata-rata suhu & kelembapan + total hujan sehari (tanggal lokal wilayah)
+                "temperature_celsius": h["suhu"],
+                "humidity_percent": h["kelembapan"],
+                "precipitation_mm": h["hujan"],
+                "lat": hasil["lat"],
+                "lon": hasil["lon"],
                 "risk_score": risk_score,
                 "risk_status": risk_status,
-                "trend": trend,
+                "trend": hasil["trend"],
+                # Pengali 0–1 per faktor (satu sumber rumus: nilai_faktor) — ditampilkan apa adanya di frontend.
+                # risk_score = bulatkan(100 × suhu × kelembapan × hujan).
+                "risk_factors": {
+                    "suhu": {"nilai": round(n_suhu, 3)},
+                    "kelembapan": {"nilai": round(n_lembap, 3)},
+                    "hujan": {"nilai": round(n_hujan, 3)},
+                },
+                "basis": {"date": h["tanggal"], "records": h["records"], "temperature_min": h["suhu_min"], "temperature_max": h["suhu_maks"]},
+                "formula_version": RUMUS.get("versi"),
+                # Cuaca "sekarang" = record BMKG per 3 jam terdekat (waktu lokal wilayah) — untuk ikon & keterangan
+                "current": {"time": sekarang["waktu"], "temperature": sekarang["suhu"], "humidity": sekarang["kelembapan"], "weather_desc": sekarang["cuaca"]},
+                "forecast_time": sekarang["waktu"],
+                "analysis_date": sekarang["analysis_date"],
+                "timezone": hasil["timezone"],
+                "weather_desc": sekarang["cuaca"],
+                "location": hasil["location"],
                 "last_updated": datetime.now().isoformat()
             }
         }
     else:
         return {
             "success": False,
-            "error": f"Data cuaca tidak tersedia. {err_msg}"
+            "error": f"Data cuaca tidak tersedia. {err_msg or ''}".strip()
         }
 
 @app.get("/api/climate-trend")
 async def get_climate_trend(lat: float = Query(...), lon: float = Query(...)):
     """Endpoint untuk mendapatkan tren iklim 12 bulan terakhir dari Open-Meteo"""
+    if RUMUS is None:
+        return JSONResponse(status_code=503, content={"success": False, "error": PESAN_RUMUS_TIDAK_SIAP})
     try:
-        import math
         from dateutil.relativedelta import relativedelta
         
         # Rolling 12 bulan terakhir
@@ -351,68 +545,15 @@ async def get_climate_trend(lat: float = Query(...), lon: float = Query(...)):
             avg_wind = sum(m_data["winds"]) / len(m_data["winds"]) if m_data["winds"] else 8.0
             
             # ══════════════════════════════════════════════════════════════
-            # RUMUS SKOR RISIKO DBD v2.0 (Revisi Peer-Review)
+            # RUMUS SKOR RISIKO DBD — versi BULANAN (v4, 2026-11-07)
             # ══════════════════════════════════════════════════════════════
-            #
-            # Referensi:
-            # - Mordecai et al. (2017): Thermal Biology of Mosquito-Borne Disease
-            #   → Puncak transmisi DENV×Ae.aegypti di 29.1°C, batas 17.8-34.5°C
-            # - Liu-Helmersson et al. (2014): Vectorial capacity model
-            #   → Puncak epidemi dengue di ~29.3°C
-            # - Studi proyeksi iklim-DBD DKI Jakarta
-            #   → Curah hujan "sesuai DBD" di rentang 100-300mm/bulan
-            # - Studi time-series Singapura/Bangkok
-            #   → Angin kencang mengganggu kemampuan terbang Aedes
-            #
-            # Bobot: Suhu 40%, Hujan 35%, Kelembapan 25%
-            # Suhu dinaikkan bobotnya karena memengaruhi hampir seluruh
-            # tahap biologi nyamuk DAN virus (EIP, biting rate, survival).
-            # Hujan diturunkan karena efeknya lebih tidak langsung &
-            # dimoderasi perilaku penyimpanan air warga urban Indonesia.
-            
-            # ─── FAKTOR 1: SUHU (40%) — Gaussian Asimetris ───
-            # Kurva performa termal Ae.aegypti asimetris:
-            # Dari puncak ke batas bawah (17.8°C): landai (jarak 11.3°C)
-            # Dari puncak ke batas atas (34.5°C): curam (jarak 5.4°C)
-            # → σ_low=5.0, σ_high=2.5 (rasio ~2:1)
-            optimal_temp = 28.0  # Konsensus 26-29°C, titik tengah pragmatis
-            sigma = 5.0 if avg_temp <= optimal_temp else 2.5
-            temp_score = math.exp(-0.5 * ((avg_temp - optimal_temp) / sigma) ** 2) * 40
-            
-            # ─── FAKTOR 2: CURAH HUJAN (35%) — Sigmoid + Flushing ───
-            # Infleksi di 150mm, mulai menurun di 300mm (bukan 400mm)
-            # Studi DKI Jakarta: rentang "sesuai DBD" = 100-300mm
-            # Studi Singapura: flushing effect menurunkan insiden dengue
-            if sum_precip <= 300:
-                rain_score = (1 / (1 + math.exp(-0.02 * (sum_precip - 150)))) * 35
-            else:
-                peak_rain = (1 / (1 + math.exp(-0.02 * (300 - 150)))) * 35
-                excess = (sum_precip - 300) / 300
-                rain_score = peak_rain * max(0.7, 1 - excess * 0.3)
-            
-            # ─── FAKTOR 3: KELEMBAPAN (25%) — Linear bertahap ───
-            # Ae.aegypti butuh RH >60%, optimal 70-85%
-            # Tidak diubah — sudah sesuai literatur
-            if avg_humid >= 80:
-                humid_score = 25
-            elif avg_humid >= 60:
-                humid_score = ((avg_humid - 60) / 20) * 25
-            else:
-                humid_score = max(0, (avg_humid / 60)) * 10
-            
-            # ─── MODIFIER: KECEPATAN ANGIN (pengali 0.85–1.0) ───
-            # Angin kencang mengganggu kemampuan terbang & mencari inang
-            # Diterapkan sebagai modifier kecil, bukan pilar bobot baru
-            # (bukti kuantitatif belum se-matang suhu & hujan)
-            if avg_wind <= 10:
-                wind_mod = 1.0
-            elif avg_wind <= 25:
-                wind_mod = 1.0 - ((avg_wind - 10) / 15) * 0.15
-            else:
-                wind_mod = 0.85
-            
-            raw_score = (temp_score + rain_score + humid_score) * wind_mod
-            score = min(max(int(round(raw_score)), 5), 100)
+            # Sama dengan skor harian: indeks = 100 × S_suhu × S_kelembapan × S_hujan.
+            # S_suhu & S_kelembapan dari rata-rata bulan; S_hujan memakai titik "bulanan.hujan"
+            # di rumus_risiko.json (total hujan sebulan, asumsi tim).
+            # Riwayat v2/v3: (suhu 40 + hujan sigmoid 35 + kelembapan 25) × pengali angin 0,85–1,0.
+            # Pengali angin dihapus di v4 — sumber kuantitatifnya tidak pernah tercatat.
+            su, ke, hu = nilai_faktor(avg_temp, avg_humid, sum_precip, RUMUS["bulanan"]["hujan"]["titik"])
+            score, _ = indeks_risiko(su, ke, hu)
             
             label = f"{months_indo[month_num-1]} '{str(year_num)[2:]}"
             
@@ -848,11 +989,14 @@ def sinkron_pesanan_midtrans(order_id):
 @app.get("/api/produk")
 async def get_produk():
     """Info produk + harga untuk frontend (satu sumber harga) dan konfigurasi Snap."""
+    if HARGA_PER_BOTOL is None:
+        return respons_produk_tidak_siap()
     return {
         "success": True,
         "nama": NAMA_PRODUK,
         "harga_per_botol": HARGA_PER_BOTOL,
         "maks_per_pesanan": MAKS_BOTOL_PER_PESANAN,
+        "pengiriman": PENGIRIMAN,
         "pembayaran": {
             "mode": "produksi" if MIDTRANS_IS_PRODUCTION else "uji_coba",
             "snap_url": SNAP_JS_URL,
@@ -863,7 +1007,13 @@ async def get_produk():
 @app.post("/api/payment/token")
 async def create_payment_token(req: PaymentRequest):
     # Nominal dihitung di server — nilai dari browser tidak pernah dipakai untuk menagih.
-    total = req.quantity * HARGA_PER_BOTOL
+    if HARGA_PER_BOTOL is None:
+        return respons_produk_tidak_siap()
+    kirim = PENGIRIMAN.get(req.delivery)
+    if kirim is None:
+        return JSONResponse(status_code=422, content={"success": False, "message": "Pilihan pengiriman ini sedang tidak tersedia."})
+    ongkir = kirim["ongkir"]
+    total = req.quantity * HARGA_PER_BOTOL + ongkir
     if req.expectedTotal is not None and req.expectedTotal != total:
         return JSONResponse(status_code=409, content={
             "success": False,
@@ -882,15 +1032,23 @@ async def create_payment_token(req: PaymentRequest):
             "total": total,
             "customer_name": req.name.strip(),
             "phone": req.phone.strip(),
-            "address": req.address.strip(),
+            # Ambil sendiri: kolom alamat diisi keterangan titik ambil supaya admin langsung tahu.
+            # Ongkir tidak butuh kolom baru: total − (quantity × unit_price).
+            "address": (req.address or "").strip() if req.delivery == "antar" else f"AMBIL SENDIRI — {kirim['keterangan']}".strip(" —"),
             "midtrans_order_id": order_id,
             "is_test": not MIDTRANS_IS_PRODUCTION,
         }).execute()
     except Exception as e:
         print(f"Gagal mencatat pesanan {order_id}: {e}")
+        pesan = "Pencatatan pesanan sedang tidak tersedia. Coba lagi nanti."
+        teks_galat = str(e)
+        if not MIDTRANS_IS_PRODUCTION and ("PGRST205" in teks_galat or ("orders" in teks_galat and "schema cache" in teks_galat)):
+            # Mode uji coba: beri tahu penguji penyebabnya (tabel belum dibuat), bukan pesan umum.
+            pesan = ("Mode uji coba: tabel pesanan (orders) belum ada di database. Jalankan migration "
+                     "supabase/migrations/20261106120000_fase1_rls_orders.sql di Supabase SQL Editor, lalu coba lagi.")
         return JSONResponse(status_code=503, content={
             "success": False,
-            "message": "Pencatatan pesanan sedang tidak tersedia. Coba lagi nanti.",
+            "message": pesan,
         })
 
     # 2) Buat transaksi Snap.
@@ -910,7 +1068,17 @@ async def create_payment_token(req: PaymentRequest):
                 "quantity": req.quantity,
                 "name": NAMA_PRODUK
             }
-        ]
+        ] + ([{
+            # Midtrans: jumlah item_details harus sama dengan gross_amount, nama maks. 50 karakter.
+            "id": "ONGKIR",
+            "price": ongkir,
+            "quantity": 1,
+            "name": f"Ongkos kirim - {kirim['label']}"[:50],
+        }] if ongkir > 0 else []),
+        # Setelah membayar di aplikasi lain (mis. e-wallet di HP), pembeli diarahkan kembali ke
+        # /checkout?order_id=...; halaman itu lalu mengecek status ke server (bukan percaya URL).
+        # Menimpa "Finish Redirect URL" di dashboard Midtrans, hanya untuk transaksi ini.
+        "callbacks": {"finish": f"{SITE_URL}/checkout"}
     }
     try:
         transaction = snap.create_transaction(param)
@@ -992,6 +1160,8 @@ async def admin_list_orders(token: str = Depends(verify_admin)):
 @app.post("/api/admin/orders")
 async def admin_create_offline_sale(req: OfflineSaleRequest, token: str = Depends(verify_admin)):
     """Catat penjualan offline (langsung/bazar/expo). Harga satuan = HARGA_PER_BOTOL."""
+    if HARGA_PER_BOTOL is None:
+        return respons_produk_tidak_siap()
     row = {
         "channel": "offline",
         "status": "selesai",

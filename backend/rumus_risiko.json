@@ -1,0 +1,56 @@
+{
+  "_catatan": "SATU-SATUNYA sumber parameter Model Risiko MosqRisk. Dibaca backend/main.py (menghitung skor) dan frontend/next.config.ts saat build (simulator & grafik kurva di /edukasi). Indeks = 100 × S_suhu × S_kelembapan × S_hujan; tiap S bernilai 0–1. S_suhu = R0(T) Mordecai dkk. 2017 untuk Aedes aegypti × DENV, dinormalkan ke puncaknya (parameter apa adanya dari S2 Text Tabel B). S_kelembapan & S_hujan = garis lurus antartitik [nilai cuaca, pengali]; di luar titik pertama/terakhir sama dengan titik terdekat. Ubah angka di sini saja, lalu jalankan ulang backend dan build ulang frontend.",
+  "versi": "4.0",
+  "berlaku_sejak": "2026-11-07",
+  "dasar_perhitungan": "Rata-rata suhu & kelembapan serta total hujan dari prakiraan BMKG per 3 jam untuk satu hari (tanggal lokal wilayah).",
+  "kategori": {
+    "tinggi": 75,
+    "sedang": 50,
+    "alasan": "Batas kategori ditetapkan tim MosqRisk: indeks ≥ 75 berarti cuaca hari itu mendukung sedikitnya 75% dari penularan maksimum."
+  },
+  "faktor": {
+    "suhu": {
+      "label": "Suhu rata-rata",
+      "satuan": "°C",
+      "status": "jurnal",
+      "kurva": "r0_mordecai_2017",
+      "sifat": {
+        "a":   { "arti": "laju menggigit", "fungsi": "briere", "T0": 13.35, "Tm": 40.08, "c": 2.02e-4 },
+        "EFD": { "arti": "telur per betina per hari", "fungsi": "briere", "T0": 14.58, "Tm": 34.61, "c": 8.56e-3 },
+        "pEA": { "arti": "peluang telur tumbuh jadi nyamuk dewasa", "fungsi": "kuadrat", "T0": 13.56, "Tm": 38.29, "c": 5.99e-3 },
+        "MDR": { "arti": "kecepatan tumbuh telur sampai dewasa", "fungsi": "briere", "T0": 11.36, "Tm": 39.17, "c": 7.86e-5 },
+        "lf":  { "arti": "umur nyamuk dewasa (hari)", "fungsi": "kuadrat", "T0": 9.16, "Tm": 37.73, "c": 1.48e-1 },
+        "b":   { "arti": "peluang nyamuk terinfeksi menjadi menular", "fungsi": "briere", "T0": 17.05, "Tm": 35.83, "c": 8.49e-4 },
+        "c":   { "arti": "peluang nyamuk tertular dari darah penderita", "fungsi": "briere", "T0": 12.22, "Tm": 37.46, "c": 4.91e-4 },
+        "PDR": { "arti": "kecepatan virus matang di tubuh nyamuk", "fungsi": "briere", "T0": 10.68, "Tm": 45.90, "c": 6.65e-5 }
+      },
+      "alasan": "Suhu memengaruhi hampir semua tahap hidup nyamuk dan virus. Nilainya diambil dari kurva angka penularan (R0) dengue oleh Aedes aegypti: nol di bawah ±17 °C, puncak ±29 °C, nol di atas ±34,6 °C.",
+      "sumber": "Mordecai dkk. (2017), PLOS Neglected Tropical Diseases 11(4): e0005568 — persamaan (1) dan S2 Text Tabel B"
+    },
+    "kelembapan": {
+      "label": "Kelembapan rata-rata",
+      "satuan": "%",
+      "status": "asumsi",
+      "titik": [[40, 0.7], [80, 1.0]],
+      "alasan": "Udara kering memperpendek umur nyamuk dewasa, sehingga peluang menularkan turun. Pengali naik dari 0,7 pada 40% sampai 1 pada 80%; kedua batas dan nilai 0,7 adalah asumsi tim MosqRisk.",
+      "sumber": "Arah pengaruh: Schmidt dkk. (2018), Parasites & Vectors 11: 267"
+    },
+    "hujan": {
+      "label": "Total hujan sehari",
+      "satuan": "mm",
+      "status": "asumsi",
+      "titik": [[0, 0.8], [5, 1.0], [50, 1.0], [100, 0.8]],
+      "alasan": "Tanpa hujan pun Aedes tetap bertelur di bak mandi dan wadah air di rumah (pengali 0,8). Hujan ringan–sedang (BMKG: 5–50 mm/hari) menambah genangan (pengali 1). Hujan lebat dapat menghanyutkan jentik (turun ke 0,8 pada 100 mm). Nilai pengali adalah asumsi tim MosqRisk.",
+      "sumber": "Arah pengaruh: kategori hujan harian BMKG; Benedum dkk. (2018), PLOS Neglected Tropical Diseases 12(12): e0006935"
+    }
+  },
+  "bulanan": {
+    "hujan": {
+      "label": "Total hujan sebulan",
+      "satuan": "mm",
+      "status": "asumsi",
+      "titik": [[0, 0.8], [100, 1.0], [300, 1.0], [600, 0.8]],
+      "alasan": "Versi bulanan untuk grafik 12 bulan di /edukasi: bentuk sama dengan pengali hujan harian, rentang disesuaikan ke total sebulan. Asumsi tim MosqRisk."
+    }
+  }
+}

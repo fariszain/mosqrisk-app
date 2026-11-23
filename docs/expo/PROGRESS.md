@@ -14,7 +14,16 @@ Format setiap entri (terbaru di atas):
 
 ---
 
-## ⚠️ MENDESAK (temuan 2026-11-06): database Supabase tidak bisa dijangkau
+## ⚠️ MENDESAK (diperbarui 2026-11-07 sore): Supabase sudah hidup, tetapi migration Fase 1 BELUM dijalankan
+
+Project **MosqRisk123** (`pvegqhvorlkfrnwovolo`) sudah *ACTIVE_HEALTHY* lagi (dicek lewat Supabase MCP, baca saja).
+Tabel yang ada: `reports`, `subscribers`, `premium_codes` — **tabel `orders` belum ada**. Akibatnya checkout
+Midtrans (sandbox) menolak membuat transaksi (503) dan panel Penjualan di admin kosong, padahal sebelum Fase 1
+Midtrans "jalan". Solusi (1 langkah, oleh user): buka Supabase → SQL Editor → jalankan isi
+`supabase/migrations/20261106120000_fase1_rls_orders.sql`. Migration itu juga menutup celah RLS dari Fase 1.
+Selama tabel belum ada, checkout mode uji coba menampilkan pesan yang menyebut migration ini.
+
+### (arsip) temuan 2026-11-06: database Supabase tidak bisa dijangkau
 
 `<project_ref>.supabase.co` (ref yang sama dengan `NEXT_PUBLIC_SUPABASE_URL`) mengembalikan
 **NXDOMAIN** — dicek lewat resolver lokal dan DNS publik Google. Penyebab paling mungkin:
@@ -30,6 +39,195 @@ Yang perlu dilakukan:
    pertimbangkan paket berbayar untuk minggu expo.
 
 ---
+
+## 2026-11-09 (lanjutan) — Fase 3e — Geist, hero satu layar, gaya gabungan di semua halaman
+
+- **Font Geist** (pilihan user dari 4 contoh: `.screenshots/fase-3c/pilihan-font.png`) lewat `next/font/google`; /kredit diperbarui.
+- **Navbar**: logo & tulisan PATCHMOS ±25% lebih kecil; menu semibold lebih gelap, menu aktif kapsul hijau tua.
+- **Warna "sedang"**: cokelat #8A5A00 (dinilai user terlalu tua) → teks #A94E0A di latar #FFF3E0 (kontras 5,1:1);
+  gauge & bar memakai token baru `--risiko-*-isi` (sedang #EE9B2F, tinggi #D9483B, rendah #3F8F55).
+- **Beranda**: hero = tinggi satu layar (diuji 1440×900, 1920×1080, 1366×768, 390×844 — bawah hero = tinggi layar);
+  produk `object-contain` mengisi sisa tinggi; kartu kecil diposisikan dari tengah. Panel produk tanpa foto marmer
+  tempelan (dinilai user "aneh"). Kartu "Dibuat lima mahasiswa" memakai foto wajah asli.
+- **Foto tim**: Sofia diperkecil + ruang latar di atas kepala (diperpanjang dari baris teratas foto) agar posisi kepala
+  ±28% & lebar bahu ±62% seperti Rafi/Talha. Potongan wajah 192 px di `public/tim/wajah/` untuk avatar.
+- **Semua halaman lain** (/pantau, /lapor, /edukasi, /checkout, /claim, /tim, /kredit, /privasi) memakai kepala hutan
+  bergaya hero Beranda (`components/ui/HeroHalaman.tsx`; /pantau versi sendiri karena panel wilayahnya).
+- Verifikasi: tsc 0; eslint hanya 3 temuan lama (checkout 137/178, pantau 172); overflow 0 px di 1440 & 390 untuk 9
+  halaman; galat konsol hanya log CSP Snap di /checkout (sudah ada sebelumnya). Galeri: `.screenshots/fase-3c/galeri-hal-*.png`.
+
+## 2026-11-09 — Fase 3d — Beranda "gabungan" (energi web lama + aset & sistem v2)
+
+User merasa web lama (Vercel) lebih "wah" di pandangan pertama. Beranda diubah (hero + bagian 2), halaman lain belum:
+- Hero hijau hutan penuh sampai belakang navbar kapsul, foto daun nilam, judul raksasa di tengah dengan frasa
+  "ampas nilam Aceh" emas bergradasi (`.teks-foil`), tombol kapsul foil + terang, render produk melayang bercahaya,
+  kartu kecil miring (skor risiko live, harga, "Tanpa DEET"; di HP chip risiko di bawah produk).
+- "Tiga langkah" jadi kartu berwarna lembut dengan angka besar bergradasi 01/02/03 (`.angka-langkah`), judul kiri.
+- Cadangan Beranda sebelum perubahan disimpan di scratchpad sesi (bukan di repo); versi itu juga ada di
+  screenshot `.screenshots/fase-3b/beranda-1440-layar.png`. Perbandingan: `.screenshots/fase-3c/perbandingan-hero.png`.
+- Foto Sofia diganti foto setengah badan (dipotong 4:5 dari foto user).
+- Verifikasi: tsc 0, eslint page.tsx bersih, overflow 0 px di 1440 & 390.
+
+## 2026-11-07 (malam) — Fase 3c — Rumus risiko v4 (R0 Mordecai), navbar kapsul, foto tim, logo tulisan
+
+**Dikerjakan**
+- **Rumus v4** (user: "rumus sebenar-benarnya yang fix dan pasti"): indeks = 100 × S_suhu × S_kelembapan × S_hujan.
+  S_suhu = R0(T) Mordecai 2017 *Ae. aegypti* (8 kurva sifat dari S2 Text Tabel B, dihitung di backend & `lib/rumus.ts`);
+  kelembapan & hujan = pengali 0–1 berlabel "asumsi tim". Detail & angka: 05_FAKTA §5. `risk_factors` kini
+  `{nilai}` (bukan `{poin, maks}`); kartu faktor /pantau, simulator & kartu rumus /edukasi, FAQ Beranda ikut diganti.
+  Grafik 12 bulan memakai rumus yang sama (pengali angin dihapus).
+- Koreksi: v3 menyebut bobot 40/25/35 "sama dengan proposal" — keliru (berasal dari kode lama). Slide PIKU
+  (slide 13/17) memuat tabel 40/30/30 bertingkat yang tidak pernah dipakai di kode.
+- Navbar jadi kapsul putih melayang; tulisan "PATCHMOS" serif dari `brand/patchmos-logo.png` (dipotong lewat CSS,
+  file tidak diedit). Tombol Beli kapsul (`rounded-full!` — `rounded-kontrol` bawaan tombol menang urutan CSS).
+- Foto 5 anggota tim dari slide PIKU → `public/tim/*.webp` (±620×860 px); kartu tim jadi potret 4:5.
+
+**Verifikasi**: uji backend 40/40 (termasuk parameter = Tabel B, puncak 29,0 °C, nol di atas 34,6 °C, perkalian
+10 °C → 0); `tsc` 0 error; screenshot navbar & /tim 1440/390.
+
+**Perlu dari tim**
+- Perbarui slide: tabel rumus 40/30/30 → rumus v4; "machine learning" & "data Kemenkes" (slide 5/15) → rumus dari
+  prakiraan BMKG; "PERINGATAN DINI KEMENKES" di mockup notifikasi (klaim terlarang §6); paket 2/3/10 & 1/2/3 botol
+  (slide 5/6) vs satu harga; Rp12.000 (slide 6) vs Rp20.000 di web; kemasan 100 mL vs botol 50 mL.
+- Tinjau asumsi pengali kelembapan & hujan dan batas kategori 75/50 bersama dosen pendamping.
+
+## 2026-11-07 (sore) — Fase 3b — Desain v2 "Kebun Nilam Aceh", rumus risiko v3, ongkir
+- Pemicu (user): tampilan Fase 3 "terlalu kosong, monoton, kaku, tanpa animasi/interaksi/gambar, kayak orang baru
+  belajar bikin web" → minta referensi desain profesional dari banyak sumber, menarik tapi "jangan lebay".
+  Sekaligus: Supabase sudah dihidupkan; kemasan pakai yang ada; ongkir "pikir saja gimana bagusnya"; foto yang
+  dihapus boleh dipakai ("yang penting menarik"); rumus skor dibantu "agar sesuai dan benar"; Midtrans cukup sandbox.
+- Riset: tangkapan layar Seed, Aesop, Ritual, Sandland, IQAir, Sensatia, Javara (Kinfield sudah tutup) + skill
+  frontend-design. Diagnosis: v1 jatuh ke pola "krem + serif + garis rambut + radius 0" yang khas halaman buatan AI.
+- Dikerjakan:
+  - **Design system v2** (`globals.css`, SKILL.md ditulis ulang): dasar putih + bidang `hutan`, satu keluarga Plus
+    Jakarta Sans 800, radius berjenjang, bayangan hanya untuk benda melayang, ornamen *pucok reubong* (motif Aceh),
+    gerak hemat (urutan masuk hero, gauge/angka/rantai "terisi sekali", gerak yang menjawab aksi).
+  - **Foto**: 8 foto Wikimedia Commons (CDC/Gathany domain publik; Fedaro, Kenraiz, Raflinoer32 CC BY-SA) +
+    3 foto lama dipulihkan sesuai izin user (nilam dipotong supaya botol merek lain tidak tampak) → `public/foto/*.webp`
+    (total ±1 MB), kredit di `lib/foto.ts`, keterangan foto, dan halaman baru `/kredit`.
+  - **Semua halaman dirombak**: Beranda (hero produk di panel daun + chip risiko live, foto nyamuk + statistik,
+    3 langkah, gauge, rantai nilam bergambar, tabel fakta produk, bukti, klaim, tanya-jawab akordeon, tim),
+    `/pantau` (kepala dasbor, gauge, checklist 3M Plus per hari, prakiraan 3 hari berikon cuaca, kunci Premium
+    buram), `/edukasi` (siklus *Aedes* interaktif berfoto, 3M Plus berikon, **simulator rumus** + kurva, grafik
+    12 bulan), `/checkout` (3 langkah, pilihan pengiriman, ringkasan sticky), `/lapor`, `/tim`, `/claim`,
+    `/privasi`, 404/galat (ilustrasi nyamuk), admin & panel penjualan, navigasi, footer.
+  - **Rumus risiko v3** (`backend/rumus_risiko.json`, satu sumber untuk backend + simulator): suhu trapesium
+    18–26–29–34 °C (Mordecai 2017), kelembapan linear 40→80% (Schmidt 2018; batas = pilihan model), hujan
+    10→35 poin (0→5 mm), 35 sampai 50 mm, turun ke 20 di 100 mm (BMKG + Benedum 2018). Dihitung dari rata-rata
+    harian (bukan satu record 3 jam) → skor tidak naik-turun siang/malam; dataran tinggi terbaca lebih rendah.
+    Bobot & kategori tetap seperti proposal. Detail & contoh: 05_FAKTA §5.
+  - **Ongkir**: diantar (Banda Aceh & Aceh Besar) atau ambil sendiri (sekitar USK), keduanya gratis di
+    `produk.json`; backend menagih `ongkir` sebagai item Midtrans bila > 0; alamat hanya wajib untuk diantar.
+  - Admin: harga satuan memakai `produk.json` saat API gagal (dulu "–"). Checkout mode uji coba menyebut
+    migration saat tabel `orders` belum ada.
+  - Lint: temuan baru dari kode baru diperbaiki (`useSyncExternalStore` untuk localStorage, dll.); total 8 → 7.
+  - "2 Issues" di Firefox user (/edukasi) tidak bisa direproduksi di Chromium maupun Firefox Playwright yang
+    bersih; kode hanya `console.error` di error.tsx → kemungkinan terbawa dari halaman lain/ekstensi.
+- Bukti verifikasi: backend `test_backend.py` **38/38** (rumus kontinu tanpa lompatan, contoh angka, rata-rata
+  harian, ongkir & ambil sendiri, Σ item Midtrans = gross_amount, fail-closed rumus/produk); `npx tsc --noEmit` 0;
+  `npm run build` sukses (13 route); ESLint 7 temuan lama; Playwright interaksi **49/49** (endpoint tulis
+  dipalsukan karena Supabase hidup — tidak ada baris yang ditambah); screenshot 1440 & 390 semua halaman tanpa
+  scroll horizontal → `.screenshots/fase-3b/`.
+- Commit: belum (user yang commit). Usulan pembagian: (1) `backend/rumus_risiko.json` + `main.py` (rumus v3,
+  ongkir) — file baru wajib ikut; (2) design system & komponen (`globals.css`, `components/ui/*`, layout); (3) halaman;
+  (4) foto `public/foto/` + `lib/foto.ts` + `/kredit`; (5) dokumen (AGENTS, SKILL, FAKTA, PROGRESS).
+- Menunggu user: jalankan migration Fase 1 (mendesak, lihat atas); konfirmasi ongkir gratis; tinjau rumus v3 bersama
+  tim/dosen; foto tim asli ke `public/tim/`.
+
+## 2026-11-07 — Fase 3 — Redesign seluruh halaman + /tim + perbaikan checkout & harga
+- Keputusan: C5 **didelegasikan user** ("kalau menurutmu masih AI slop, sesuaikan") → dipakai rekomendasi
+  A "Label Apotek Botani" + modul indikator risiko (B) + modul rantai nilam (C). Commit tetap dikerjakan user.
+- Pemicu sesi: checkout menampilkan "Harga tidak dapat dimuat" karena backend lokal (uvicorn :8000) mati
+  setelah sesi sebelumnya berakhir — bukan bug kode, tetapi halaman memang tidak tahan backend mati.
+- Dikerjakan:
+  - **Harga satu sumber yang tahan backend mati**: `backend/produk.json` dibaca `main.py` (menagih) dan
+    `next.config.ts` saat build (env `PRODUK_*` → `lib/produk.ts`). Harga Rp20.000 tampil walau API mati;
+    pembayaran tetap dinonaktifkan dengan pesan jelas + email pemesanan. Tervalidasi: bundle produksi berisi
+    `Number("20000")`.
+  - **Backend**: `skor_faktor()` (refaktor tanpa mengubah hasil — diuji 448 kombinasi), `/api/mosqrisk` kini
+    mengirim `risk_factors`, `forecast_time`, `timezone`, `location`, `weather_desc`; memilih record BMKG
+    **terdekat dengan waktu akses** (dulu record pertama hari itu, bisa berselisih jam); `trend` punya
+    `date`/`risk_status`/`records`; token Snap memakai `callbacks.finish = SITE_URL/checkout`.
+  - **Design system**: token di `globals.css`, Libre Caslon Text + Plus Jakarta Sans, Phosphor (satu
+    keluarga), komponen `components/ui/*`, `SkalaRisiko`, `RisikoHariIni`, `RantaiNilam`, `BuktiUji`,
+    `PanelKlaim`, `Dialog` (`<dialog>` bawaan). Aturan final: `.claude/skills/mosqrisk-design/SKILL.md`.
+  - **Halaman**: Beranda (Server Component, risiko live, bukti, rantai nilam, klaim, tim), **/tim baru**
+    (anggota + dosen, foto otomatis dari `public/tim/`, cara Patchmos dibuat, hasil uji, kontak), /pantau,
+    /checkout, /lapor, /edukasi (Server Component + grafik), /claim, /admin + SalesPanel, /privasi,
+    **404 & error.tsx baru**. Navbar/BottomNav/Footer/ClaimModal baru.
+  - **Checkout**: foto & fakta produk, stepper + input jumlah yang tidak tereset saat diketik, galat per
+    field + fokus, bar bayar di HP (BottomNav disembunyikan), kembali dari e-wallet `?order_id=` → status
+    dicek otomatis, dialog hasil dengan nomor pesanan + salin + "Cek status lagi", referensi Baymard
+    (total terlihat sejak awal, field sesedikit mungkin).
+  - **Perbaikan lain**: GPS tidak lagi diminta otomatis saat halaman dibuka (/pantau, /edukasi); melihat
+    wilayah lain tidak lagi diam-diam memindahkan notifikasi email (kini tombol eksplisit); pemindai QR
+    menjelaskan galat kamera (dulu kotak hitam), satu pindaian = satu klaim, modal bisa ditutup Escape,
+    tidak lagi melempar ke Beranda; favicon default Next.js/Vercel & ikon PWA siluet generik diganti tanda
+    daun asli; opsi `eslint` (dihapus di Next 16) dibuang dari config; `typescript.ignoreBuildErrors`
+    dimatikan (tsc 0 error, baseline Fase 1: 35).
+  - **Edukasi bersumber**: gejala & tanda bahaya (WHO), siklus *Aedes* (CDC), 3M Plus (Kemenkes) — dicatat
+    di `05_FAKTA §7` dengan tanda PERLU DICEK TIM. Tabel rumus menampilkan aturan apa adanya, termasuk dua
+    keanehan rumus yang menunggu keputusan tim.
+  - **Bersih-bersih**: hapus `/design-lab`, `template.tsx` (animasi transisi), `RevealOnScroll`,
+    `SlidingAuthCard`, 22 aset tak terpakai di `public/` (termasuk `test.html` yang ikut ter-publish, foto
+    nilam yang menampilkan **produk lain** "Patchouli Distillate", foto nyamuk stok tanpa lisensi jelas,
+    `logonavbar.png` versi lama), paket `framer-motion`, `leaflet`, `react-leaflet`, `@types/leaflet`
+    (tidak pernah dipakai), `phosphor-icons` lama; CDN Material Symbols & font Geist dihapus.
+- File: lihat `git status` (≈ 15 file diubah besar, 20+ file baru, 30 file dihapus). Dokumen: AGENTS.md,
+  README.md, 01_ROADMAP (C5), 05_FAKTA (§3, §5, §7), SKILL.md baru.
+- Bukti verifikasi:
+  - `npx tsc --noEmit` → **0 error**; `npm run build` sukses **dengan validasi tipe aktif** (semua rute statis
+    kecuali `/claim`). Tampilan Premium /pantau dicek (kartu "Hari ini" dicocokkan dengan tanggal lokal).
+  - Backend: 21/21 uji (`test_backend_fase3.py`, BMKG/Supabase/Midtrans dipalsukan): harga dari
+    produk.json, rumus tak berubah, record terdekat, hujan = daftar tanggal lokal hari ini, field baru,
+    `callbacks.finish`, 409/422, produk.json tidak valid → hanya penjualan 503 (skor risiko tetap 200).
+  - Playwright 33/33 uji interaksi: harga tampil saat `/api/produk` diputus, stepper/validasi/fokus,
+    `?order_id=` + Escape, modal klaim (huruf besar, galat, tab pindai tanpa kamera), `/claim?code=`,
+    ganti wilayah → tersimpan → dipakai Beranda, lapor, PIN admin salah, 404, BottomNav, grafik & tautan
+    sumber, tautan "Langsung ke konten".
+  - Screenshot 1440 & 390 semua halaman di `.screenshots/fase-3/` (0 px scroll horizontal; error konsol
+    hanya log CSP milik Snap Midtrans dan status 404 pada halaman 404). Dasbor admin difoto dengan respons
+    API palsu di browser uji (tidak ada data yang ditulis).
+  - Grep klaim: sisa kemunculan hanya negasi jujur ("bukan uji klinis", "bukan machine learning",
+    "tidak disebut 100% alami"), Kemenkes sebagai sumber, label kontak "Nomor HP / WhatsApp".
+  - ESLint (`npx eslint app components lib`): 8 temuan, semuanya `react-hooks/set-state-in-effect`
+    (pola muat-data/baca-localStorage saat mount; peringatan performa, bukan bug). Sebelumnya 42 error
+    (`eslint-results.txt` lama). Rapikan di Fase 5 dengan `useSyncExternalStore` bila sempat — lint tidak
+    lagi menghambat build di Next 16.
+- **Reviewer independen** (subagent, konteks bersih): 0 temuan tinggi, 4 sedang, 4 rendah — semua diperbaiki:
+  1. Pindai QR bisa mengklaim berulang (kamera menyala lagi setelah jeda) → kode yang sama diabaikan, kode
+     terisi ke tab Ketik untuk coba ulang.
+  2. Beberapa detail kesehatan tidak ada di halaman sumber yang ditautkan (CDC "±5 hari"/"2–3 hari", WHO
+     "3–7 hari", Kemenkes "seminggu sekali"/kawat kasa/gotong royong) → dihapus; 3M bersumber
+     ayosehat.kemkes.go.id; ditambah onset 4–10 hari (ada di WHO). 05_FAKTA §7 diperbarui.
+  3. `produk.json` hilang/rusak mematikan seluruh API → kini hanya `/api/produk`, token pembayaran, dan
+     catat penjualan yang 503. **Pastikan `backend/produk.json` ikut di-commit** (file baru).
+  4. Respons lambat bisa menimpa pilihan wilayah yang lebih baru → penghitung permintaan (pantau, Beranda, tren).
+  5. Tombol "Buka pantauan risiko" di modal tidak menutup modal → `onSelesai`.
+  6. Menjelang tengah malam "hujan hari ini" bisa berisi total hari besok → hujan dari daftar tanggal lokal;
+     kartu "Hari ini" dicocokkan dengan tanggal; teks "hari itu".
+  7. Pelanggan yang sesi Google-nya habis tidak punya tombol masuk → tombol ditambahkan.
+  8. Kode bisa hangus bila browser memblokir penyimpanan → dicek sebelum klaim; cadangan status per sesi.
+- Keputusan menunggu user/tim: lihat bagian "Keputusan terbuka" di bawah.
+- Usulan pembagian commit (user yang commit):
+  1. `backend/produk.json`, `backend/main.py`, `frontend/next.config.ts`, `frontend/lib/produk.ts` — harga satu sumber + API risiko.
+  2. `frontend/app/globals.css`, `layout.tsx`, `favicon.ico`, `public/ikon/`, `public/manifest.json`, `components/ui/*`, `package*.json` — design system.
+  3. `components/{Navbar,BottomNav,Footer}.tsx`, `not-found.tsx`, `error.tsx` — kerangka global.
+  4. Beranda + `/tim` + komponen `SkalaRisiko`, `RisikoHariIni`, `RantaiNilam`, `BuktiUji`, `beranda/`, `lib/{risiko,tim}.ts`.
+  5. `/checkout`; 6. `/pantau`; 7. `/lapor`; 8. `/edukasi` + `edukasi/TrenIklim.tsx`; 9. klaim (`PanelKlaim`, `ClaimModal`, `/claim`, `lib/{klaim,premium}.ts`);
+  10. `/admin` + `SalesPanel`; 11. `/privasi`; 12. penghapusan (`design-lab`, `template.tsx`, aset `public/`); 13. dokumen.
+
+### Keputusan terbuka (per 2026-11-07)
+1. **Supabase masih NXDOMAIN** (dicek lagi 2026-11-07) → restore project, lalu jalankan migration C4.
+2. **Ongkos kirim** pesanan online: sekarang tertulis "Pengiriman: diatur tim lewat nomor HP-mu".
+3. **Render kemasan** masih "100 mL" (web: 50 mL) dan memuat ikon "Safer Skin" (klaim keamanan yang belum diuji).
+4. **Foto**: anggota → `frontend/public/tim/<nama-berkas-di-lib/tim.ts>.jpg`; produksi → `public/tim/produksi/`.
+5. **Rumus**: hujan 0,1–0,4 mm = 5 poin (lebih rendah dari 0 mm = 10) dan kelembapan 59% = 9,8 vs 60% = 0.
+6. **05_FAKTA §7** (info kesehatan) perlu dicek anggota/dosen yang paham kesehatan.
+7. **Midtrans produksi**: Notification URL, `SITE_URL`, dan cek apakah aktivasi butuh halaman syarat &
+   ketentuan/pengembalian dana (isinya keputusan bisnis tim — belum dibuat).
+8. Skrip lama di root (`fix_dots.py`, `remove_bg.py`, `render_*.js`, `test_svg.py`, `scripts/*spray*`)
+   masih merujuk aset yang sudah dihapus — aman dihapus kalau tidak dipakai lagi.
 
 ## 2026-11-06 — Fase 2 — Eksplorasi arah desain (berhenti di C5)
 - Dikerjakan:

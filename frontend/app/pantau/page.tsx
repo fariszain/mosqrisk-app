@@ -1,795 +1,635 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
-import Link from 'next/link';
-import Image from 'next/image';
+import { useCallback, useEffect, useRef, useState } from "react";
+import Image from "next/image";
+import Link from "next/link";
+import type { User } from "@supabase/supabase-js";
+import {
+  BellRingingIcon,
+  CaretDownIcon,
+  CloudRainIcon,
+  CrosshairIcon,
+  GoogleLogoIcon,
+  LockSimpleIcon,
+  MapPinIcon,
+  QrCodeIcon,
+  ThermometerSimpleIcon,
+} from "@phosphor-icons/react/ssr";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import { toast } from 'react-hot-toast';
-
-import { useRouter } from 'next/navigation';
+import ClaimModal from "@/components/ClaimModal";
+import SkalaRisiko from "@/components/SkalaRisiko";
+import IkonCuaca from "@/components/IkonCuaca";
+import ChecklistPencegahan from "@/components/pantau/ChecklistPencegahan";
+import Catatan from "@/components/ui/Catatan";
+import { kelasTombol } from "@/components/ui/tombol";
+import { kelasLabel, kelasInput } from "@/components/ui/bidang";
 import { supabase } from "@/lib/supabase";
+import { usePremium } from "@/lib/premium";
+import { PRODUK, rupiah } from "@/lib/produk";
+import {
+  DataRisiko,
+  HariTren,
+  KATEGORI,
+  LOKASI_BAWAAN,
+  LokasiTersimpan,
+  StatusRisiko,
+  ambilRisiko,
+  bacaLokasi,
+  fmtAngka,
+  fmtHari,
+  rapikanNama,
+  simpanLokasi,
+  tanggalLokalHariIni,
+} from "@/lib/risiko";
 
-export default function MosqRiskDashboard() {
-  const router = useRouter();
-  const [isMounted, setIsMounted] = useState(false);
-  const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
-  const [isWAModalOpen, setIsWAModalOpen] = useState(false);
-  const [isPremiumAlertOpen, setIsPremiumAlertOpen] = useState(false);
-  const [waNumber, setWaNumber] = useState('');
-  const [waSubmitting, setWaSubmitting] = useState(false);
-  const [waSuccess, setWaSuccess] = useState('');
-  const [waError, setWaError] = useState('');
-  const [pendingGPSCity, setPendingGPSCity] = useState("");
-  const [isEmailRegistered, setIsEmailRegistered] = useState(false);
-  const [subscribedEmail, setSubscribedEmail] = useState("");
-  const [subscribedLocation, setSubscribedLocation] = useState("");
-  const [isPremium, setIsPremium] = useState(false);
-  const [user, setUser] = useState<Record<string, unknown> | null>(null);
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "";
+const WILAYAH_API = "https://www.emsifa.com/api-wilayah-indonesia/api";
 
-  // State untuk Dropdown Lokasi Emsifa (Moved up to fix variable hoisting)
-  const [provinces, setProvinces] = useState<Array<Record<string, unknown>>>([]);
-  const [regencies, setRegencies] = useState<Array<Record<string, unknown>>>([]);
-  const [selectedProv, setSelectedProv] = useState("");
-  const [selectedReg, setSelectedReg] = useState("");
-  const [locationName, setLocationName] = useState("");
+type Wilayah = { id: string; name: string };
 
-  // State untuk Data Dinamis
-  const [mosqRiskData, setMosqRiskData] = useState<Record<string, unknown> | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [errorMsg, setErrorMsg] = useState("");
+let cacheProvinsi: Promise<Wilayah[]> | null = null;
+function ambilProvinsi() {
+  cacheProvinsi ??= fetch(`${WILAYAH_API}/provinces.json`).then((r) => {
+    if (!r.ok) throw new Error("provinsi");
+    return r.json();
+  });
+  return cacheProvinsi.catch((e) => {
+    cacheProvinsi = null;
+    throw e;
+  });
+}
+const ambilKabupaten = (provId: string): Promise<Wilayah[]> =>
+  fetch(`${WILAYAH_API}/regencies/${provId}.json`).then((r) => {
+    if (!r.ok) throw new Error("kabupaten");
+    return r.json();
+  });
 
-  useEffect(() => {
-    setTimeout(() => setIsMounted(true), 0);
-    
-    const checkUser = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        // Login ≠ berlangganan. Email hanya diisi otomatis; status "terdaftar" baru diset
-        // setelah pengguna menekan "Daftar Sekarang" (handleWASubmit) — persetujuan eksplisit.
-        setUser(session.user as Record<string, unknown>);
-        setWaNumber(session.user.email || '');
-      }
-    };
-    checkUser();
+const tanpaAwalan = (s: string) => s.toUpperCase().replace(/^(KOTA|KABUPATEN|KAB\.)\s+/, "").replace(/\s+/g, "");
 
-    const { data } = supabase.auth.onAuthStateChange((event, session) => {
-      if (session?.user) {
-        setUser(session.user as Record<string, unknown>);
-        setWaNumber(session.user.email || '');
-      } else {
-        setUser(null);
-      }
-    });
+// Status langganan email disimpan di browser (kunci lama dipertahankan).
+function bacaLangganan(): { email: string; lokasi: string } | null {
+  try {
+    if (localStorage.getItem("emailRegistered") !== "true") return null;
+    return { email: localStorage.getItem("subscribedEmail") || "", lokasi: localStorage.getItem("subscribedLocation") || "" };
+  } catch {
+    return null;
+  }
+}
 
-    if (typeof window !== 'undefined') {
-      const premium = localStorage.getItem('isPremium') === 'true';
-      setIsPremium(premium);
+export default function PantauPage() {
+  const premium = usePremium();
+  const [lokasi, setLokasi] = useState<LokasiTersimpan>(LOKASI_BAWAAN);
+  const [bawaan, setBawaan] = useState(true);
+  const [data, setData] = useState<DataRisiko | null>(null);
+  const [status, setStatus] = useState<"memuat" | "siap" | "gagal">("memuat");
+  const [pesan, setPesan] = useState("");
 
-      if (localStorage.getItem('emailRegistered') === 'true') {
-        setIsEmailRegistered(true);
-        setSubscribedEmail(localStorage.getItem('subscribedEmail') || "");
-        setSubscribedLocation(localStorage.getItem('subscribedLocation') || "");
-      }
-    }
-    // (Dulu di sini mengambil "impact_kg" dari /api/stats — angka hasil rumus karangan, sudah dihapus.)
-  }, [router]);
+  const [panelLokasi, setPanelLokasi] = useState(false);
+  const [provinsi, setProvinsi] = useState<Wilayah[]>([]);
+  const [kabupaten, setKabupaten] = useState<Wilayah[]>([]);
+  const [provPilihan, setProvPilihan] = useState("");
+  const [galatWilayah, setGalatWilayah] = useState("");
+  const [gps, setGps] = useState<"diam" | "mencari">("diam");
+  const [pesanGps, setPesanGps] = useState("");
 
-  const handleWASubmit = async () => {
-    if(!locationName) { 
-      setWaError("Silakan pilih Lokasi Pemantauan di Dasbor terlebih dahulu."); 
-      return; 
-    }
-    if(!waNumber) { setWaError("Nomor/Email tidak boleh kosong"); return; }
-    setWaSubmitting(true);
-    setWaError('');
-    setWaSuccess('');
+  const [user, setUser] = useState<User | null>(null);
+  const [langganan, setLangganan] = useState<{ email: string; lokasi: string } | null>(null);
+  const [mengirim, setMengirim] = useState(false);
+  const [pesanLangganan, setPesanLangganan] = useState<{ nada: "sukses" | "galat"; teks: string } | null>(null);
+  const [klaimBuka, setKlaimBuka] = useState(false);
+  // Hanya hasil permintaan TERBARU yang dipakai (mis. lokasi bawaan lambat, lalu pengguna memilih kota lain).
+  const permintaan = useRef(0);
+
+  const muatRisiko = useCallback(async (l: LokasiTersimpan) => {
+    const id = ++permintaan.current;
+    setStatus("memuat");
     try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
-      const res = await fetch(`${API_URL}/api/subscribe`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          locationName: locationName || "Umum",
-          email: waNumber
-        })
-      });
-      const data = await res.json();
-      if(data.success) {
-        setWaSuccess(data.message);
-        localStorage.setItem('emailRegistered', 'true');
-        localStorage.setItem('subscribedEmail', waNumber);
-        localStorage.setItem('subscribedLocation', locationName || "Umum");
-        setIsEmailRegistered(true);
-        setSubscribedEmail(waNumber);
-        setSubscribedLocation(locationName || "Umum");
-        setTimeout(() => { setIsWAModalOpen(false); setWaSuccess(''); setWaNumber(''); }, 3000);
-      } else {
-        setWaError(data.message);
-      }
-    } catch {
-      setWaError("Terjadi kesalahan koneksi.");
-    } finally {
-      setWaSubmitting(false);
+      const hasil = await ambilRisiko(l.regId);
+      if (id !== permintaan.current) return;
+      setData(hasil);
+      setStatus("siap");
+    } catch (e) {
+      if (id !== permintaan.current) return;
+      setData(null);
+      setPesan(e instanceof Error ? e.message : "");
+      setStatus("gagal");
     }
-  };
-
-  const handleGoogleLogin = async () => {
-    try {
-      await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: `${window.location.origin}/pantau`
-        }
-      });
-    } catch {
-      toast.error("Gagal memulai login Google");
-    }
-  };
-
-
-  // Fetch daftar provinsi saat komponen dimuat
-  useEffect(() => {
-    fetch("https://www.emsifa.com/api-wilayah-indonesia/api/provinces.json")
-      .then(res => res.json())
-      .then(data => {
-        setProvinces(data);
-      })
-      .catch(err => console.error("Gagal memuat provinsi:", err));
   }, []);
 
-  // Auto-detect GPS when provinces are ready
-  useEffect(() => {
-    if (provinces.length > 0 && !selectedProv && !sessionStorage.getItem('gpsPrompted')) {
-      sessionStorage.setItem('gpsPrompted', 'true'); // Hanya prompt sekali per sesi
-      handleGPSLocation();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [provinces]);
+  const pilihLokasi = useCallback(
+    (l: LokasiTersimpan) => {
+      setLokasi(l);
+      setBawaan(false);
+      simpanLokasi(l);
+      setPanelLokasi(false);
+      void muatRisiko(l);
+    },
+    [muatRisiko]
+  );
 
-  // Fetch daftar kabupaten/kota ketika provinsi dipilih
-  useEffect(() => {
-    if (!selectedProv) {
-      const t = setTimeout(() => {
-        setRegencies([]);
-        setSelectedReg("");
-      }, 0);
-      return () => clearTimeout(t);
-    }
-    fetch(`https://www.emsifa.com/api-wilayah-indonesia/api/regencies/${selectedProv}.json`)
-      .then(res => res.json())
-      .then(data => {
-        setRegencies(data);
-        // GPS Auto-select logic
-        if (pendingGPSCity) {
-          const cleanPending = pendingGPSCity.replace("KOTA ", "").replace("KABUPATEN ", "").replace(/\s+/g, "");
-          const matchedReg = data.find((r: Record<string, unknown>) => {
-            const cleanRegName = r.name.replace("KOTA ", "").replace("KABUPATEN ", "").replace(/\s+/g, "");
-            return cleanRegName.includes(cleanPending) || cleanPending.includes(cleanRegName);
-          });
-          
-          if (matchedReg) {
-            setSelectedReg(matchedReg.id);
-            setIsLocationModalOpen(false);
-          } else {
-            toast.error(`Kota ${pendingGPSCity} tidak ditemukan di database (Kemungkinan GPS meleset). Silakan pilih manual.`);
-          }
-          setPendingGPSCity("");
-          setLoading(false);
-        }
-      })
-      .catch(err => {
-        console.error("Gagal memuat kabupaten:", err);
-        setLoading(false);
-      });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedProv]);
-
-  function handleGPSLocation() {
-    if (!navigator.geolocation) {
-      toast.error("Browser Anda tidak mendukung fitur GPS.");
+  // GPS hanya dipakai saat diminta, atau otomatis kalau izinnya SUDAH pernah diberikan.
+  const pakaiGps = useCallback(async () => {
+    setPesanGps("");
+    if (!("geolocation" in navigator)) {
+      setPesanGps("Browser ini tidak bisa membaca lokasi. Pilih wilayah secara manual.");
       return;
     }
-    setLoading(true);
-    navigator.geolocation.getCurrentPosition(async (position) => {
-      try {
-        const { latitude, longitude } = position.coords;
-        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`);
-        const data = await res.json();
-        
-        if (data && data.address) {
-          const state = data.address.state?.toUpperCase() || "";
-          const city = (data.address.city || data.address.county || data.address.town || "").toUpperCase();
-          
-          if (!state || !city) throw new Error("Data lokasi GPS tidak lengkap.");
-          
-          // Cari provinsi
-          const matchedProv = provinces.find((p: Record<string, unknown>) => p.name.includes(state) || state.includes(p.name));
-          if (matchedProv) {
-            setPendingGPSCity(city);
-            setSelectedProv((matchedProv as Record<string, unknown>).id);
-          } else {
-            throw new Error(`Provinsi ${state} tidak ditemukan.`);
-          }
-        }
-      } catch (err: Record<string, unknown>) {
-        toast.error("Gagal melacak lokasi: " + err.message);
-        setLoading(false);
-      }
-    }, () => {
-      toast.error("Izin GPS ditolak.");
-      setLoading(false);
-    });
-  };
+    setGps("mencari");
+    try {
+      const pos = await new Promise<GeolocationPosition>((ok, gagal) =>
+        navigator.geolocation.getCurrentPosition(ok, gagal, { timeout: 15000, maximumAge: 600000 })
+      );
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=json&accept-language=id&lat=${pos.coords.latitude}&lon=${pos.coords.longitude}`
+      );
+      const alamat = (await res.json())?.address ?? {};
+      const prov = String(alamat.state || "").toUpperCase();
+      const kota = String(alamat.city || alamat.county || alamat.town || alamat.regency || "");
+      if (!prov || !kota) throw new Error("Lokasimu belum bisa dikenali. Pilih wilayah secara manual.");
+      const daftarProv = await ambilProvinsi();
+      const p = daftarProv.find((x) => x.name.includes(prov) || prov.includes(x.name));
+      if (!p) throw new Error(`Provinsi ${rapikanNama(prov)} tidak ditemukan. Pilih wilayah secara manual.`);
+      const daftarKab = await ambilKabupaten(p.id);
+      const target = tanpaAwalan(kota);
+      const k = daftarKab.find((x) => tanpaAwalan(x.name).includes(target) || target.includes(tanpaAwalan(x.name)));
+      if (!k) throw new Error(`${rapikanNama(kota)} belum ada di daftar wilayah. Pilih wilayah secara manual.`);
+      pilihLokasi({ provId: p.id, regId: k.id, nama: k.name, provNama: p.name });
+    } catch (e) {
+      const izinDitolak = typeof e === "object" && e !== null && "code" in e && (e as GeolocationPositionError).code === 1;
+      setPesanGps(
+        izinDitolak ? "Izin lokasi ditolak. Pilih wilayah secara manual." : e instanceof Error ? e.message : "Lokasi belum bisa dibaca. Pilih wilayah secara manual."
+      );
+    } finally {
+      setGps("diam");
+    }
+  }, [pilihLokasi]);
 
-  // Eksekusi penarikan data BMKG saat kabupaten/kota dipilih
+  // Awal: lokasi tersimpan → atau Banda Aceh (bawaan); auth Supabase; status langganan.
   useEffect(() => {
-    if (!selectedReg) return;
-    
-    const regObj: Record<string, unknown> = regencies.find((r: Record<string, unknown>) => r.id === selectedReg);
-    if (regObj) {
-      setTimeout(() => setLocationName(regObj.name as string), 0);
+    const tersimpan = bacaLokasi();
+    const l = tersimpan ?? LOKASI_BAWAAN;
+    setLokasi(l);
+    setBawaan(!tersimpan);
+    void muatRisiko(l);
+    setLangganan(bacaLangganan());
+
+    if (!tersimpan && navigator.permissions?.query) {
+      navigator.permissions
+        .query({ name: "geolocation" as PermissionName })
+        .then((s) => {
+          if (s.state === "granted") void pakaiGps();
+        })
+        .catch(() => {});
     }
 
-    const fetchMosqRisk = async () => {
-      setLoading(true);
-      setErrorMsg("");
+    // Login ≠ berlangganan: langganan baru dibuat saat pengguna menekan tombol.
+    supabase.auth.getSession().then(({ data: { session } }) => setUser(session?.user ?? null)).catch(() => {});
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => setUser(session?.user ?? null));
+    return () => sub.subscription.unsubscribe();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const bukaPanelLokasi = async () => {
+    const buka = !panelLokasi;
+    setPanelLokasi(buka);
+    setGalatWilayah("");
+    if (buka && provinsi.length === 0) {
       try {
-        // Ambil mapping regency ke adm4 (Kemendagri 2022) dari file lokal
-        const mapRes = await fetch("/regency_to_adm4.json");
-        const regencyMap = await mapRes.json();
-        const adm4 = regencyMap[selectedReg];
-        
-        if (!adm4) throw new Error("Data wilayah tidak didukung oleh BMKG.");
-        
-        // Hit Backend FastAPI
-        const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
-        const backendRes = await fetch(`${API_URL}/api/mosqrisk?adm4=${adm4}`);
-        const backendData = await backendRes.json();
-        
-        if (backendData.success) {
-            // Sinkronisasi data tren hari pertama agar persis dengan skor saat ini
-            if (backendData.data.trend && backendData.data.trend.length > 0) {
-                backendData.data.trend[0].risk_score = backendData.data.risk_score;
-            }
-            setMosqRiskData(backendData.data);
-            
-            // AUTO-TRACKING LOGIC
-            const currentEmail = localStorage.getItem('emailRegistered') === 'true' ? localStorage.getItem('subscribedEmail') : null;
-            const currentSubLoc = localStorage.getItem('subscribedLocation');
-            const newLocName = regObj ? regObj.name : "";
-            
-            if (currentEmail && newLocName && currentSubLoc !== newLocName) {
-                fetch(`${API_URL}/api/subscribe`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        locationName: newLocName,
-                        email: currentEmail
-                    })
-                }).then(r => r.json()).then(subData => {
-                    if(subData.success) {
-                        localStorage.setItem('subscribedLocation', newLocName);
-                        setSubscribedLocation(newLocName);
-                        toast.success(`Lokasi peringatan email diperbarui ke ${newLocName}`);
-                    }
-                }).catch(e => console.error("Auto-track error", e));
-            }
-        } else {
-            setErrorMsg(backendData.error || "Gagal mengambil data cuaca dari backend.");
-            setMosqRiskData(null);
-        }
-      } catch (err: Record<string, unknown>) {
-        console.error(err);
-        setErrorMsg(err.message || "Terjadi kesalahan saat memproses lokasi.");
-        setMosqRiskData(null);
-      } finally {
-        setLoading(false);
+        setProvinsi(await ambilProvinsi());
+      } catch {
+        setGalatWilayah("Daftar provinsi belum bisa dimuat. Periksa koneksi, lalu coba lagi.");
       }
-    };
-    
-    fetchMosqRisk();
-  }, [selectedReg, regencies]);
+    }
+  };
+
+  const gantiProvinsi = async (id: string) => {
+    setProvPilihan(id);
+    setKabupaten([]);
+    setGalatWilayah("");
+    if (!id) return;
+    try {
+      setKabupaten(await ambilKabupaten(id));
+    } catch {
+      setGalatWilayah("Daftar kabupaten/kota belum bisa dimuat. Periksa koneksi, lalu coba lagi.");
+    }
+  };
+
+  const gantiKabupaten = (id: string) => {
+    const k = kabupaten.find((x) => x.id === id);
+    const p = provinsi.find((x) => x.id === provPilihan);
+    if (k) pilihLokasi({ provId: provPilihan, regId: k.id, nama: k.name, provNama: p?.name });
+  };
+
+  const masukGoogle = async () => {
+    setPesanLangganan(null);
+    const { error } = await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo: `${window.location.origin}/pantau` } });
+    if (error) setPesanLangganan({ nada: "galat", teks: "Login Google belum bisa dimulai. Coba lagi beberapa saat lagi." });
+  };
+
+  // Daftar / pindahkan notifikasi — selalu lewat tombol (persetujuan eksplisit).
+  const daftarkan = async () => {
+    if (!user?.email) return;
+    setMengirim(true);
+    setPesanLangganan(null);
+    try {
+      const res = await fetch(`${API_URL}/api/subscribe`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ locationName: lokasi.nama, email: user.email }),
+      });
+      const hasil = await res.json().catch(() => ({}));
+      if (!res.ok || !hasil.success) throw new Error(hasil.message || "Pendaftaran notifikasi gagal. Coba lagi nanti.");
+      try {
+        localStorage.setItem("emailRegistered", "true");
+        localStorage.setItem("subscribedEmail", user.email);
+        localStorage.setItem("subscribedLocation", lokasi.nama);
+      } catch {
+        // penyimpanan browser tidak tersedia
+      }
+      setLangganan({ email: user.email, lokasi: lokasi.nama });
+      setPesanLangganan({ nada: "sukses", teks: hasil.message || `Notifikasi email aktif untuk ${rapikanNama(lokasi.nama)}.` });
+    } catch (e) {
+      setPesanLangganan({ nada: "galat", teks: e instanceof Error && e.message ? e.message : "Server tidak bisa dihubungi. Coba lagi nanti." });
+    } finally {
+      setMengirim(false);
+    }
+  };
+
+  const keluar = async () => {
+    await supabase.auth.signOut().catch(() => {});
+    try {
+      localStorage.removeItem("emailRegistered");
+      localStorage.removeItem("subscribedEmail");
+      localStorage.removeItem("subscribedLocation");
+    } catch {
+      // abaikan
+    }
+    setUser(null);
+    setLangganan(null);
+    setPesanLangganan(null);
+  };
+
+  const tren = (data?.trend ?? []).slice(0, 3);
+  const tanggalHariIni = data ? tanggalLokalHariIni(data.timezone) : tanggalLokalHariIni("Asia/Jakarta");
+  const namaLokasi = rapikanNama(lokasi.nama);
+  const lokasiBeda = langganan && langganan.lokasi && langganan.lokasi !== lokasi.nama;
 
   return (
-    <div className="w-full flex flex-col min-h-screen pt-28 md:pt-32 font-['Plus_Jakarta_Sans'] antialiased">
-      <Navbar rightAction={
-        <button 
-          onClick={() => {
-            if (isPremium) setIsWAModalOpen(true);
-            else setIsPremiumAlertOpen(true);
-          }}
-          className={`flex items-center justify-center gap-2 w-10 h-10 md:w-auto md:h-auto md:px-6 md:py-2.5 rounded-full font-bold text-[15px] transition-all duration-300 shrink-0 shadow-sm ${isEmailRegistered ? 'bg-green-50 text-green-600 border border-green-200 cursor-default' : 'bg-[#1A3626] text-white hover:bg-[#12261b] hover:shadow-md hover:scale-105 active:scale-95 cursor-pointer'}`}
-          title={isEmailRegistered ? "Notifikasi Email Sudah Aktif" : "Aktifkan Notifikasi Email"}
+    <>
+      <Navbar />
+      <main id="konten" className="flex-1 bg-kertas">
+        {/* Kepala dasbor: wilayah + kontrol lokasi */}
+        {/* Gaya hero gabungan (lihat components/ui/HeroHalaman.tsx): hutan penuh sampai belakang navbar kapsul */}
+        <section
+          aria-labelledby="judul-pantau"
+          className="permukaan-gelap relative isolate -mt-[68px] bg-hutan pt-[68px] text-white md:-mt-20 md:pt-20"
         >
-          <span className={`material-symbols-outlined text-[20px] ${!isEmailRegistered ? 'text-[#EAC775]' : ''}`}>
-            {isEmailRegistered ? 'mark_email_read' : 'notifications_active'}
-          </span>
-          <span className="hidden md:block">
-            {isEmailRegistered ? 'Email / Setelan' : isPremium ? 'Aktifkan Alert Darurat' : 'Aktifkan Peringatan'}
-          </span>
-        </button>
-      } />
-
-      {/* Main Content */}
-      <div className={`max-w-7xl mx-auto w-full px-3 sm:px-6 lg:px-8 flex-grow flex flex-col transition-all duration-1000 ease-out transform ${isMounted ? 'opacity-100 blur-0 translate-y-0 scale-100' : 'opacity-0 blur-md translate-y-8 scale-95'}`}>
-        <main id="pantau" className="flex-grow pt-4 pb-8 w-full grid grid-cols-1 lg:grid-cols-12 gap-8">
-          {/* Main Dashboard Segment */}
-          
-          {/* Location Button (Compact) */}
-          <div 
-            className="col-span-1 lg:col-span-12 flex justify-between items-center bg-surface rounded-[20px] p-4 md:p-6 shadow-sm border border-outline/10 cursor-pointer hover:bg-surface-dim transition-colors" 
-            onClick={() => setIsLocationModalOpen(true)}
-          >
-            <div className="flex items-center gap-3 text-on-surface">
-              <span className="material-symbols-outlined text-primary text-2xl md:text-3xl">location_on</span>
-              <div>
-                <p className="font-label-sm text-xs md:text-sm text-on-surface-variant">Lokasi Pemantauan {isPremium && <span className="ml-2 bg-[#EAC775] text-[#1A3626] px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-sm">Premium</span>}</p>
-                <p className="font-headline-md text-sm md:text-base text-primary font-bold">
-                  {locationName ? `${locationName}${provinces.find((p:Record<string, unknown>) => p.id === selectedProv) ? `, ${(provinces.find((p:Record<string, unknown>) => p.id === selectedProv) as Record<string, unknown>).name}` : ''}` : "Ketuk untuk memilih lokasi..."}
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 md:gap-4 shrink-0">
-              {loading && <span className="material-symbols-outlined animate-spin text-primary">sync</span>}
-              {!loading && errorMsg && <span className="material-symbols-outlined text-danger" title={errorMsg}>error</span>}
-              <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary">
-                <span className="material-symbols-outlined text-sm md:text-base">edit_location</span>
-              </div>
-            </div>
+          <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
+            <Image src="/foto/nilam-daun.webp" alt="" fill priority sizes="100vw" className="object-cover opacity-25" />
+            <div className="absolute inset-0 bg-gradient-to-b from-hutan/75 via-hutan/50 to-hutan" />
+            <div className="absolute -bottom-40 left-1/2 h-[26rem] w-[40rem] -translate-x-1/2 rounded-full bg-foil/15 blur-[120px]" />
           </div>
+          <div className="wadah pb-12 pt-10 md:pb-16 md:pt-16">
+            <p className="masuk inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-2 text-[14px] font-medium text-pucat backdrop-blur-sm">
+              <MapPinIcon size={18} weight="duotone" aria-hidden="true" className="text-foil" />
+              Risiko nyamuk DBD hari ini di
+            </p>
+            <h1
+              id="judul-pantau"
+              className="masuk mt-5 max-w-[20ch] text-[clamp(2.4rem,1.15rem+3.7vw,4.5rem)] font-extrabold leading-[1.0] tracking-[-0.04em]"
+              style={{ "--tunda": "80ms" } as React.CSSProperties}
+            >
+              <span className="teks-foil">{namaLokasi}</span>
+              {lokasi.provNama && <span className="font-semibold text-pucat">, {rapikanNama(lokasi.provNama)}</span>}
+            </h1>
+            {bawaan && <p className="mt-3 text-[15px] text-pucat">Lokasi bawaan. Pilih wilayahmu untuk skor yang sesuai.</p>}
 
-          
-          
-              {/* Left Column */}
-              <div className="col-span-1 lg:col-span-4 flex flex-col gap-6 md:gap-8">
-          {/* Risk Score Card */}
-          <div className="flex flex-col items-center justify-center text-center bg-surface rounded-[20px] shadow-sm hover:shadow-lg transition-all duration-300 hover:-translate-y-1 p-6 md:p-8 relative overflow-hidden">
-            {!mosqRiskData && !loading && (
-              <div 
-                className="absolute inset-0 bg-surface/80 backdrop-blur-sm z-10 flex items-center justify-center cursor-pointer group"
-                onClick={() => setIsLocationModalOpen(true)}
-              >
-                <p className="text-on-surface-variant font-label-md bg-white px-6 py-3 rounded-full shadow-md group-hover:shadow-lg group-hover:scale-105 transition-all">Pilih Lokasi Terlebih Dahulu</p>
-              </div>
-            )}
-            {loading && (
-              <div className="absolute inset-0 bg-surface z-20 flex flex-col items-center justify-center p-8">
-                <div className="h-4 bg-gray-200 animate-pulse rounded w-1/2 mb-8"></div>
-                <div className="w-40 h-20 md:w-48 md:h-24 bg-gray-200 animate-pulse rounded-t-full mb-6"></div>
-                <div className="h-8 bg-gray-200 animate-pulse rounded w-3/4 mb-4"></div>
-                <div className="h-6 bg-gray-200 animate-pulse rounded w-1/3"></div>
-              </div>
-            )}
-            <h2 className="font-label-md text-label-md text-on-surface-variant uppercase tracking-widest mb-4">TINGKAT RISIKO SAAT INI</h2>
-            <div className="relative w-40 h-20 md:w-48 md:h-24 overflow-hidden mb-4">
-              {/* Semi-circle gauge visualization placeholder */}
-              <div 
-                className={`absolute inset-0 rounded-t-full border-[12px] md:border-[16px] border-b-0 border-transparent transition-all duration-1000 ${mosqRiskData ? (mosqRiskData.risk_status === 'TINGGI' ? 'bg-gradient-to-tr from-warning to-danger' : mosqRiskData.risk_status === 'SEDANG' ? 'bg-gradient-to-tr from-yellow-300 to-warning' : 'bg-gradient-to-tr from-green-300 to-primary') : 'bg-surface-variant'}`}
-                style={{ clipPath: "polygon(0 0, 100% 0, 100% 100%, 0 100%)" }}
-              ></div>
-              <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[136px] h-[68px] md:w-40 md:h-20 bg-surface rounded-t-full border-[8px] md:border-[12px] border-b-0 border-white"></div>
-              <div className="absolute bottom-1 md:bottom-2 w-full text-center">
-                <span className="font-display-md md:font-display-lg text-primary text-3xl md:text-5xl font-bold">{mosqRiskData ? mosqRiskData.risk_score : "-"}</span>
-                <span className="text-on-surface-variant text-xs md:text-sm">/100</span>
-              </div>
+            <div className="mt-7 flex flex-wrap items-center gap-3">
+              <button type="button" onClick={() => void bukaPanelLokasi()} aria-expanded={panelLokasi} aria-controls="panel-wilayah" className={kelasTombol("foil", "md", "rounded-full! px-6")}>
+                Pilih wilayah
+                <CaretDownIcon size={18} weight="bold" aria-hidden="true" className={`transition-transform duration-300 ${panelLokasi ? "rotate-180" : ""}`} />
+              </button>
+              <button type="button" onClick={() => void pakaiGps()} disabled={gps === "mencari"} className={kelasTombol("terang", "md", "rounded-full! px-6")}>
+                <CrosshairIcon size={18} weight="duotone" aria-hidden="true" className={gps === "mencari" ? "animate-spin" : ""} />
+                {gps === "mencari" ? "Mencari lokasi…" : "Pakai lokasiku"}
+              </button>
             </div>
-            <div className={`px-4 py-1 rounded-full font-label-sm text-label-sm uppercase flex items-center gap-1 ${mosqRiskData ? (mosqRiskData.risk_status === 'TINGGI' ? 'bg-danger/10 text-danger' : mosqRiskData.risk_status === 'SEDANG' ? 'bg-warning/10 text-warning' : 'bg-primary/10 text-primary') : 'bg-surface-variant text-on-surface-variant'}`}>
-              <span className="material-symbols-outlined text-[16px]">{mosqRiskData ? 'warning' : 'help'}</span>
-              RISIKO {mosqRiskData ? mosqRiskData.risk_status : "BELUM DIKETAHUI"}
-            </div>
-            {isPremium && mosqRiskData && (
-              <div className="mt-4 w-full bg-[#EAC775]/20 border border-[#EAC775]/50 rounded-xl p-3 flex flex-col gap-1.5 items-start text-left animate-in zoom-in duration-300">
-                <div className="font-black text-[#1A3626] text-[11px] uppercase tracking-wider flex items-center gap-1.5">
-                  <span className="material-symbols-outlined text-[14px]">radar</span> PERINGATAN DINI GEOSPASIAL
-                </div>
-                <div className="text-xs text-[#1A3626]/90 font-medium leading-relaxed">
-                  {/* Skor hanya mengukur kesesuaian cuaca bagi nyamuk (BMKG) — bukan data kasus DBD. */}
-                  {mosqRiskData.risk_status === 'TINGGI' ? (
-                    <>
-                      <span className="text-red-700 font-bold bg-red-100 px-1.5 py-0.5 rounded shadow-sm mr-1">AWAS</span>
-                      Prakiraan cuaca sangat mendukung perkembangbiakan nyamuk. Tingkatkan kewaspadaan dan lakukan 3M Plus.
-                    </>
-                  ) : mosqRiskData.risk_status === 'SEDANG' ? (
-                    <>
-                      <span className="text-yellow-700 font-bold bg-yellow-100 px-1.5 py-0.5 rounded shadow-sm mr-1">SIAGA</span>
-                      Prakiraan cuaca cukup mendukung aktivitas nyamuk. Tetap waspada terhadap genangan air.
-                    </>
-                  ) : (
-                    <>
-                      <span className="text-green-700 font-bold bg-green-100 px-1.5 py-0.5 rounded shadow-sm mr-1">RENDAH</span>
-                      Prakiraan cuaca kurang mendukung perkembangbiakan nyamuk. Tetap jaga kebersihan lingkungan.
-                    </>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Action Card */}
-          <div className="rounded-[20px] bg-gradient-to-br from-[#1A3626] to-[#0c1a12] text-white p-6 md:p-8 relative overflow-hidden shadow-xl border border-[#EAC775]/20 hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 group">
-            {/* Elegant Background Patterns */}
-            <div className="absolute right-0 top-0 w-64 h-64 bg-[#EAC775]/5 rounded-full blur-[80px] pointer-events-none"></div>
-            <div className="absolute left-[-20%] bottom-[-20%] w-48 h-48 bg-[#4ade80]/10 rounded-full blur-[60px] pointer-events-none"></div>
-            
-            <div className="absolute right-[-5%] bottom-[-5%] opacity-10 transform -rotate-12 pointer-events-none z-0">
-              <span className="material-symbols-outlined text-[150px] text-[#EAC775]">shield_with_heart</span>
-            </div>
-
-            {/* Background Spray Silhouette */}
-            <div className="absolute right-[-10%] bottom-[-15%] opacity-40 w-48 h-48 md:w-64 md:h-64 pointer-events-none z-0 transition-transform duration-500 group-hover:scale-110 mix-blend-screen">
-              <Image 
-                src="/spray-square-white.png"
-                alt="Botol Patchmos" 
-                width={300}
-                height={300}
-                className="w-full h-full object-contain filter drop-shadow-[0_0_15px_rgba(234,199,117,0.3)]" 
-              />
-            </div>
-
-            <div className="relative z-10">
-              <h3 className="font-headline-md text-headline-md font-bold mb-4 flex items-center gap-2 text-[#EAC775]">
-                <span className="material-symbols-outlined">health_and_safety</span>
-                TINDAKAN DISARANKAN
-              </h3>
-              <p className="font-body-md text-body-md text-white/90 mb-6 leading-relaxed">
-                {mosqRiskData
-                  ? (mosqRiskData.risk_status === 'TINGGI' ? "Cuaca sangat mendukung nyamuk berkembang biak. Kuras dan tutup penampungan air, singkirkan barang bekas yang bisa menampung air, dan lindungi diri dari gigitan nyamuk." : "Tetap lakukan 3M Plus secara rutin dan lindungi diri dari gigitan nyamuk saat beraktivitas, terutama pagi dan sore hari.")
-                  : "Menunggu pemilihan lokasi untuk memberikan saran yang akurat."}
+            {pesanGps && (
+              <p role="status" className="mt-3 rounded-kontrol bg-white/10 px-3 py-2 text-[14px] text-white">
+                {pesanGps}
               </p>
-              {/* "Estimasi Proteksi: 4 Jam" dihapus — angka tetap tanpa dasar; uji efikasi produk belum dilakukan. */}
-              {isPremium ? (
-                <Link
-                  href="/checkout"
-                  className="w-full bg-[#EAC775] text-[#1A3626] font-black py-3 md:py-4 rounded-xl flex items-center justify-center gap-2 hover:bg-[#d4b05a] transition-all duration-200 hover:scale-[1.02] active:scale-95 shadow-lg border border-yellow-400"
-                >
-                  Beli Patchmos Lagi
-                </Link>
-              ) : (
-                <Link
-                  href="/checkout"
-                  className="w-full bg-white text-[#1A3626] font-bold py-3 md:py-4 rounded-xl flex items-center justify-center gap-2 hover:bg-gray-50 transition-all duration-200 hover:scale-[1.02] active:scale-95 shadow-lg"
-                >
-                  <span className="text-lg">🛒</span> Beli Patchmos Spray
-                </Link>
-              )}
+            )}
+
+            <div
+              className={`grid transition-[grid-template-rows,opacity] duration-300 ease-out ${panelLokasi ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"}`}
+              inert={!panelLokasi}
+            >
+              <div className="overflow-hidden">
+                <div id="panel-wilayah" className="mt-5 grid gap-4 rounded-kartu bg-white p-4 text-tinta md:grid-cols-2 md:p-5">
+                  <div>
+                    <label htmlFor="provinsi" className={kelasLabel}>
+                      Provinsi
+                    </label>
+                    <select id="provinsi" value={provPilihan} onChange={(e) => void gantiProvinsi(e.target.value)} className={kelasInput}>
+                      <option value="">Pilih provinsi</option>
+                      {provinsi.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {rapikanNama(p.name)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label htmlFor="kabupaten" className={kelasLabel}>
+                      Kabupaten / kota
+                    </label>
+                    <select
+                      id="kabupaten"
+                      value=""
+                      onChange={(e) => gantiKabupaten(e.target.value)}
+                      disabled={!provPilihan || kabupaten.length === 0}
+                      className={kelasInput}
+                    >
+                      <option value="">{provPilihan ? "Pilih kabupaten/kota" : "Pilih provinsi dulu"}</option>
+                      {kabupaten.map((k) => (
+                        <option key={k.id} value={k.id}>
+                          {rapikanNama(k.name)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  {galatWilayah && <p className="text-[14px] text-galat md:col-span-2">{galatWilayah}</p>}
+                  <p className="keterangan md:col-span-2">Daftar wilayah: emsifa API Wilayah Indonesia. Titik prakiraan: satu desa/kelurahan per kabupaten/kota.</p>
+                </div>
+              </div>
             </div>
           </div>
+        </section>
+
+        {/* Skor hari ini + checklist */}
+        <div className="wadah grid gap-5 py-8 md:py-12 lg:grid-cols-12">
+          <section aria-labelledby="judul-skor" className="rounded-media bg-white p-5 shadow-tipis md:p-9 lg:col-span-8">
+            <h2 id="judul-skor" className="mb-6 text-[15px] font-semibold text-sekunder">
+              Hari ini
+            </h2>
+            <SkalaRisiko data={data} status={status} pesanGagal={pesan} onCobaLagi={() => void muatRisiko(lokasi)} />
+          </section>
+          <aside className="grid content-start gap-5 lg:col-span-4">
+            <div className="rounded-media bg-white p-5 shadow-tipis md:p-7">
+              <ChecklistPencegahan tanggal={tanggalHariIni} />
+            </div>
+            <Link
+              href="/checkout"
+              className="group grid grid-cols-[84px_1fr] items-center gap-4 rounded-media bg-hutan p-4 pr-5 text-white transition-colors hover:bg-kemasan"
+            >
+              <span className="relative block aspect-square overflow-hidden rounded-kontrol bg-white/10">
+                <Image src="/brand/patchmos-produk.png" alt="" fill sizes="84px" className="object-contain p-1 transition-transform duration-500 group-hover:scale-105" />
+              </span>
+              <span>
+                <span className="block text-[17px] font-bold">{premium ? "Stok Patchmos menipis?" : "Lindungi diri dari gigitan"}</span>
+                <span className="mt-0.5 block text-[14px] leading-snug text-pucat">Spray dari ampas nilam, tanpa DEET.</span>
+                <span className="mt-1.5 block text-[14.5px] font-semibold text-foil">
+                  {premium ? "Beli lagi" : "Beli Patchmos"}
+                  {PRODUK.harga ? `, ${rupiah(PRODUK.harga)}` : ""}
+                </span>
+              </span>
+            </Link>
+          </aside>
         </div>
 
-        {/* Right Column */}
-        <div className="col-span-1 lg:col-span-8 flex flex-col gap-6 md:gap-8">
-          {/* Weather Grid */}
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-8 relative">
-            {!mosqRiskData && !loading && (
-              <div 
-                className="absolute inset-0 bg-surface/80 backdrop-blur-sm z-10 flex items-center justify-center rounded-[20px] cursor-pointer group"
-                onClick={() => setIsLocationModalOpen(true)}
-              >
-                <p className="text-on-surface-variant font-label-md bg-white px-6 py-3 rounded-full shadow-md group-hover:shadow-lg group-hover:scale-105 transition-all">Pilih Lokasi Terlebih Dahulu</p>
-              </div>
-            )}
-            {loading && (
-              <div className="absolute inset-0 z-20 grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-8">
-                {[1,2,3].map(i => (
-                  <div key={i} className={`bg-surface rounded-[20px] p-4 md:p-8 flex items-center gap-4 animate-pulse border border-outline/5 ${i===3 ? 'col-span-2 md:col-span-1' : ''}`}>
-                    <div className="w-8 h-8 md:w-12 md:h-12 bg-gray-200 rounded-full shrink-0"></div>
-                    <div className="flex-col gap-2 flex-grow hidden md:flex">
-                      <div className="h-3 bg-gray-200 rounded w-1/2"></div>
-                      <div className="h-5 bg-gray-200 rounded w-3/4"></div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-            <div className="flex flex-col md:flex-row items-center md:items-start text-center md:text-left gap-2 md:gap-4 bg-surface rounded-[20px] shadow-sm hover:shadow-lg transition-all duration-300 hover:-translate-y-1 p-4 md:p-8">
-              <div className="w-8 h-8 md:w-12 md:h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0">
-                <span className="material-symbols-outlined text-lg md:text-3xl">rainy</span>
-              </div>
-              <div>
-                <p className="font-label-sm text-xs md:text-label-sm text-on-surface-variant">Curah Hujan</p>
-                <p className="font-headline-md text-base md:text-headline-md text-primary">{mosqRiskData && mosqRiskData.precipitation_mm !== undefined ? mosqRiskData.precipitation_mm : "-"} <span className="text-xs md:text-sm">mm</span></p>
-              </div>
-            </div>
-            
-            <div className="flex flex-col md:flex-row items-center md:items-start text-center md:text-left gap-2 md:gap-4 bg-surface rounded-[20px] shadow-sm hover:shadow-lg transition-all duration-300 hover:-translate-y-1 p-4 md:p-8">
-              <div className="w-8 h-8 md:w-12 md:h-12 rounded-full bg-danger/10 flex items-center justify-center text-danger shrink-0">
-                <span className="material-symbols-outlined text-lg md:text-3xl">device_thermostat</span>
-              </div>
-              <div>
-                <p className="font-label-sm text-xs md:text-label-sm text-on-surface-variant">Suhu</p>
-                <p className="font-headline-md text-base md:text-headline-md text-danger">{mosqRiskData ? mosqRiskData.temperature_celsius : "-"} <span className="text-xs md:text-sm">°C</span></p>
-              </div>
+        {/* Prakiraan 3 hari (Premium) */}
+        <section aria-labelledby="judul-tiga-hari" className="pb-10 md:pb-14">
+          <div className="wadah">
+            <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
+              <h2 id="judul-tiga-hari" className="judul-2">
+                Prakiraan risiko 3 hari
+              </h2>
+              {!premium && (
+                <p className="inline-flex items-center gap-2 rounded-full bg-peringatan-latar px-3.5 py-1.5 text-[14px] font-semibold text-peringatan-teks">
+                  <LockSimpleIcon size={16} weight="bold" aria-hidden="true" />
+                  Fitur Premium
+                </p>
+              )}
             </div>
 
-            <div className="col-span-2 md:col-span-1 flex flex-col md:flex-row items-center md:items-start text-center md:text-left gap-2 md:gap-4 bg-surface rounded-[20px] shadow-sm hover:shadow-lg transition-all duration-300 hover:-translate-y-1 p-4 md:p-8">
-              <div className="w-8 h-8 md:w-12 md:h-12 rounded-full bg-warning/10 flex items-center justify-center text-warning shrink-0">
-                <span className="material-symbols-outlined text-lg md:text-3xl">humidity_percentage</span>
-              </div>
-              <div>
-                <p className="font-label-sm text-xs md:text-label-sm text-on-surface-variant">Kelembaban</p>
-                <p className="font-headline-md text-base md:text-headline-md text-warning">{mosqRiskData ? mosqRiskData.humidity_percent : "-"} <span className="text-xs md:text-sm">%</span></p>
-              </div>
-            </div>
-          </div>
-
-          {/* Trend Chart */}
-          <div className="flex-grow flex flex-col bg-surface rounded-[20px] shadow-sm hover:shadow-lg transition-all duration-300 hover:-translate-y-1 p-6 md:p-10 relative">
-            {!mosqRiskData && !loading && (
-              <div 
-                className="absolute inset-0 bg-surface/80 backdrop-blur-sm z-10 flex items-center justify-center rounded-[20px] cursor-pointer group"
-                onClick={() => setIsLocationModalOpen(true)}
-              >
-                <p className="text-on-surface-variant font-label-md bg-white px-6 py-3 rounded-full shadow-md group-hover:shadow-lg group-hover:scale-105 transition-all">Pilih Lokasi Terlebih Dahulu</p>
-              </div>
-            )}
-            {loading && (
-              <div className="absolute inset-0 bg-surface z-20 flex flex-col p-6 md:p-10 animate-pulse rounded-[20px]">
-                <div className="h-6 bg-gray-200 rounded w-1/3 md:w-1/4 mb-6"></div>
-                <div className="flex-grow bg-gray-100/50 rounded-xl w-full"></div>
-              </div>
-            )}
-            <h3 className="font-headline-md text-base md:text-headline-md text-primary mb-4 md:mb-6">
-              Tren Risiko Geospasial
-            </h3>
-            <div className="flex-grow w-full bg-surface-container-low rounded-xl relative overflow-hidden min-h-[250px] md:min-h-[200px]">
-              {mosqRiskData?.trend ? (
+            {premium ? (
+              tren.length > 0 && status === "siap" && data ? (
                 <>
-                <ResponsiveContainer width="100%" height="100%" className={!isPremium ? "pointer-events-none" : ""}>
-                  <AreaChart 
-                    data={mosqRiskData.trend} 
-                    margin={{ top: 20, right: 20, left: 0, bottom: 0 }}
-                  >
-                    <defs>
-                      <linearGradient id="colorRisk" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor={isPremium ? "#EAC775" : "#BA1A1A"} stopOpacity={0.4}/>
-                        <stop offset="95%" stopColor={isPremium ? "#EAC775" : "#BA1A1A"} stopOpacity={0}/>
-                      </linearGradient>
-                    </defs>
-                    <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#44474E' }} dy={10} />
-                    <YAxis hide domain={[0, 100]} />
-                    <Tooltip 
-                      contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', backgroundColor: isPremium ? '#F4F6F5' : 'white' }}
-                      itemStyle={{ color: isPremium ? '#1A3626' : '#BA1A1A', fontWeight: 'bold' }}
-                      formatter={(value: Record<string, unknown>) => [`${value} / 100`, 'Skor Risiko']}
-                    />
-                    <Area type="monotone" dataKey="risk_score" stroke={isPremium ? "#EAC775" : "#BA1A1A"} strokeWidth={3} fillOpacity={1} fill="url(#colorRisk)" />
-                  </AreaChart>
-                </ResponsiveContainer>
-                {!isPremium && (
-                  <div 
-                    onClick={() => setIsPremiumAlertOpen(true)}
-                    className="absolute inset-0 w-full h-full bg-surface-container-low/60 backdrop-blur-sm z-10 flex flex-col items-center justify-center cursor-pointer group"
-                  >
-                    <div className="bg-[#1A3626] p-3 md:p-4 rounded-full shadow-lg mb-3 group-hover:scale-110 transition-transform duration-300">
-                      <span className="material-symbols-outlined text-[#EAC775] text-3xl md:text-4xl">lock</span>
-                    </div>
-                    <p className="text-sm md:text-base font-black text-[#1A3626] text-center px-4 drop-shadow-sm">
-                      Fitur Terkunci
-                      <br/>
-                      <span className="font-medium text-[11px] md:text-xs text-[#1A3626]/80 mt-1.5 block max-w-xs mx-auto">
-                        Berlangganan Premium untuk membuka akses Prakiraan Risiko 3 Hari.
-                      </span>
-                    </p>
-                    <button className="mt-4 bg-[#EAC775] text-[#1A3626] font-bold text-xs md:text-sm px-5 py-2 rounded-xl shadow-md hover:bg-[#d4b05a] hover:scale-105 transition-all">
-                      Buka Akses Premium
-                    </button>
-                  </div>
-                )}
+                  <ol className="mt-7 grid gap-4 md:grid-cols-3">
+                    {tren.map((d, i) => (
+                      <KartuHari key={d.date ?? i} d={d} hariIni={d.date ? d.date === tanggalHariIni : i === 0} urutan={i} />
+                    ))}
+                  </ol>
+                  <p className="keterangan mt-5 max-w-[80ch]">
+                    Setiap hari dihitung dengan rumus yang sama: rata-rata suhu dan kelembapan serta total hujan dari prakiraan BMKG per 3 jam di hari
+                    itu.
+                  </p>
                 </>
               ) : (
-                <div className="absolute inset-0 bg-gradient-to-t from-danger/20 to-transparent flex items-end">
-                  <svg className="w-full h-3/4 fill-danger/10 stroke-danger stroke-2" preserveAspectRatio="none" viewBox="0 0 100 50">
-                    <path d="M0,50 L0,30 C20,20 40,40 60,10 C80,-10 90,20 100,5 L100,50 Z"></path>
-                  </svg>
-                </div>
-              )}
-            </div>
-
-            {/* Tombol Auto-Update Email ke Lokasi Terkini */}
-            {isEmailRegistered && isPremium && (
-              <button 
-                onClick={handleGPSLocation} 
-                className="mt-6 w-full bg-primary/10 text-primary hover:bg-primary hover:text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 transition-all border border-primary/20 shadow-sm group"
-              >
-                <span className="material-symbols-outlined group-hover:animate-pulse">my_location</span>
-                <span className="text-sm md:text-base">Sesuaikan Lokasi Email dengan GPS Terkini</span>
-              </button>
-            )}
-
-          </div>
-
-          {/* Eco Impact */}
-          <div className="bg-surface-tint/5 flex flex-col md:flex-row items-center md:items-start text-center md:text-left gap-4 md:gap-6 rounded-[20px] shadow-sm hover:shadow-lg transition-all duration-300 hover:-translate-y-1 p-6 md:p-8">
-            <div className="w-10 h-10 md:w-16 md:h-16 rounded-full bg-primary text-white flex items-center justify-center shrink-0">
-              <span className="material-symbols-outlined text-lg md:text-3xl">eco</span>
-            </div>
-            <div>
-              <p className="font-body-md text-sm md:text-body-md text-on-surface-variant mb-1">Dari Limbah Nilam</p>
-              <p className="font-label-md text-sm md:text-label-md text-on-surface">Penyulingan nilam hanya menghasilkan sekitar 1,5–3% minyak; lebih dari 95% sisanya limbah padat yang umumnya belum dimanfaatkan (Indriani dkk., 2025). Patchmos memakai ampas inilah sebagai sumber bahan aktif.</p>
-            </div>
-          </div>
-        </div>
-
-        </main>
-      </div>
-
-      {/* Location Modal */}
-      {isLocationModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/50 backdrop-blur-sm transition-opacity p-0 md:p-4" onClick={() => setIsLocationModalOpen(false)}>
-          <div className="bg-surface w-full md:max-w-md rounded-t-[24px] md:rounded-[24px] p-6 shadow-xl transform transition-all animate-in slide-in-from-bottom-8 md:slide-in-from-bottom-0 md:zoom-in-95" onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="font-headline-md text-lg text-primary font-bold">Pilih Lokasi</h3>
-              <button onClick={() => setIsLocationModalOpen(false)} className="text-on-surface-variant p-2 rounded-full hover:bg-surface-dim bg-surface-container-low transition-colors">
-                <span className="material-symbols-outlined text-sm">close</span>
-              </button>
-            </div>
-            
-            <div className="flex flex-col gap-4">
-              <button 
-                onClick={handleGPSLocation}
-                className="w-full bg-primary/10 text-primary hover:bg-primary hover:text-white font-bold py-3 rounded-lg flex items-center justify-center gap-2 transition-colors mb-2"
-              >
-                <span className="material-symbols-outlined">my_location</span>
-                Gunakan Lokasi Saat Ini (GPS)
-              </button>
-              
-              <div className="flex items-center gap-4 mb-2">
-                <div className="flex-1 h-px bg-outline/20"></div>
-                <span className="text-xs text-on-surface-variant font-bold">ATAU</span>
-                <div className="flex-1 h-px bg-outline/20"></div>
-              </div>
-
-              <div>
-                <label className="block font-label-sm text-xs text-on-surface-variant mb-2 font-bold uppercase tracking-wider">Provinsi</label>
-                <select 
-                  className="w-full bg-background border border-outline/30 rounded-lg px-4 py-3 text-on-surface focus:outline-none focus:border-primary text-sm cursor-pointer transition-colors"
-                  value={selectedProv}
-                  onChange={(e) => { setSelectedProv(e.target.value); setSelectedReg(""); }}
-                >
-                  <option value="">-- Pilih Provinsi --</option>
-                  {provinces.map((p: Record<string, unknown>) => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
-                  ))}
-                </select>
-              </div>
-              
-              <div>
-                <label className="block font-label-sm text-xs text-on-surface-variant mb-2 font-bold uppercase tracking-wider">Kota / Kabupaten</label>
-                <select 
-                  className="w-full bg-background border border-outline/30 rounded-lg px-4 py-3 text-on-surface focus:outline-none focus:border-primary text-sm cursor-pointer disabled:opacity-50 transition-colors"
-                  value={selectedReg}
-                  onChange={(e) => { setSelectedReg(e.target.value); setIsLocationModalOpen(false); }}
-                  disabled={selectedProv === ""}
-                >
-                  <option value="">-- Pilih Kota/Kabupaten --</option>
-                  {regencies.map((r: Record<string, unknown>) => (
-                    <option key={r.id} value={r.id}>{r.name}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* WA Modal */}
-      {isWAModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/50 backdrop-blur-sm transition-opacity p-0 md:p-4" onClick={() => setIsWAModalOpen(false)}>
-          <div className="bg-surface w-full md:max-w-md rounded-t-[32px] md:rounded-[32px] shadow-2xl p-6 md:p-8 animate-in slide-in-from-bottom-10 md:zoom-in-95 duration-300" onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-bold text-on-surface flex items-center gap-2">
-                <span className="material-symbols-outlined text-green-500">forum</span>
-                Notifikasi Email
-              </h2>
-              <button onClick={() => setIsWAModalOpen(false)} className="text-on-surface-variant p-2 rounded-full hover:bg-surface-dim bg-surface-container-low transition-colors">
-                <span className="material-symbols-outlined text-sm">close</span>
-              </button>
-            </div>
-            
-            {waSuccess ? (
-              <div className="flex flex-col items-center justify-center py-6 animate-in zoom-in duration-300">
-                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
-                  <span className="material-symbols-outlined text-4xl text-green-600">check_circle</span>
-                </div>
-                <h3 className="text-lg font-bold text-on-surface mb-2">Pendaftaran Berhasil!</h3>
-                <p className="text-center text-sm text-on-surface-variant px-4">
-                  Sistem kami telah mendaftarkan email Anda. Anda akan menerima pesan sambutan di kotak masuk email Anda sekarang juga.
-                </p>
-              </div>
-            ) : isEmailRegistered ? (
-              <div className="flex flex-col gap-4 animate-in zoom-in duration-300">
-                <div className="bg-[#1A3626]/5 p-4 rounded-xl border border-[#1A3626]/10 text-center">
-                  <p className="text-sm text-on-surface-variant mb-1">Berlangganan sebagai:</p>
-                  <p className="font-bold text-[#1A3626] mb-3">{subscribedEmail}</p>
-                  <p className="text-sm text-on-surface-variant mb-1">Lokasi Pemantauan:</p>
-                  <p className="font-bold text-[#1A3626]">{subscribedLocation || locationName}</p>
-                </div>
-                <button 
-                  onClick={async () => {
-                    await supabase.auth.signOut();
-                    setUser(null);
-                    localStorage.removeItem('emailRegistered');
-                    localStorage.removeItem('subscribedEmail');
-                    localStorage.removeItem('subscribedLocation');
-                    setIsEmailRegistered(false);
-                    setSubscribedEmail("");
-                    setSubscribedLocation("");
-                    setWaNumber("");
-                    setIsWAModalOpen(false);
-                  }}
-                  className="w-full bg-red-50 text-red-600 border border-red-200 font-bold py-3 rounded-lg hover:bg-red-100 transition-colors flex items-center justify-center gap-2 shadow-sm"
-                >
-                  <span className="material-symbols-outlined text-sm">logout</span> Logout
-                </button>
-                <p className="text-xs text-on-surface-variant text-center leading-relaxed">
-                  Logout tidak menghentikan email. Untuk berhenti berlangganan, balas email MosqRisk dengan kata BERHENTI.
-                </p>
-              </div>
+                <p className="mt-6 text-[16px] text-sekunder">Prakiraan 3 hari muncul setelah skor wilayahmu termuat.</p>
+              )
             ) : (
-              <>
-                <p className="text-sm text-on-surface-variant mb-6">
-                  {user ? (
-                    <span>Kamu login dengan email <strong className="text-primary">{user.email}</strong>. Aktifkan notifikasi email untuk wilayah <strong>{locationName || "ini"}</strong>? Kamu akan menerima email saat ada laporan warga di wilayah ini atau saat tim MosqRisk mengirim peringatan.</span>
-                  ) : (
-                    <span>Login dengan akun Google dulu untuk mengaktifkan notifikasi email.</span>
-                  )}
-                </p>
-
-                <div className="flex flex-col gap-4">
-                  {waError && <p className="text-red-500 text-sm font-semibold">{waError}</p>}
-
-                  {user ? (
-                    <button 
-                      onClick={handleWASubmit}
-                      disabled={waSubmitting}
-                      className="w-full bg-[#1A3626] text-[#EAC775] font-bold py-3 rounded-lg hover:bg-[#12261b] hover:text-white transition-colors flex items-center justify-center gap-2 disabled:opacity-70 shadow-md"
-                    >
-                      {waSubmitting ? "Mendaftarkan..." : "Daftar Sekarang"}
-                    </button>
-                  ) : (
-                    <button 
-                      onClick={handleGoogleLogin}
-                      className="w-full bg-white border border-gray-300 text-gray-700 font-bold py-3 rounded-lg hover:bg-gray-50 transition-colors flex items-center justify-center gap-3 shadow-sm"
-                    >
-                      <Image unoptimized src="https://www.svgrepo.com/show/475656/google-color.svg" alt="Google" width={20} height={20} className="w-5 h-5" />
-                      Login dengan Google
-                    </button>
-                  )}
+              <div className="relative mt-7 min-h-[26rem] overflow-hidden rounded-media md:min-h-[22rem]">
+                <ol aria-hidden="true" className="grid gap-4 blur-[5px] md:grid-cols-3">
+                  {["Hari ini", "Besok", "Lusa"].map((h, i) => (
+                    <li key={h} className="h-[22rem] rounded-media bg-white p-6 md:h-[22rem]">
+                      <p className="text-[16px] font-semibold">{h}</p>
+                      <div className="mt-5 h-14 w-24 rounded-kontrol bg-kertas-gelap" />
+                      <div className="mt-4 h-2 rounded-full bg-kertas-gelap">
+                        <div className="h-2 rounded-full bg-daun/50" style={{ width: `${55 + i * 12}%` }} />
+                      </div>
+                      <div className="mt-5 h-4 w-3/4 rounded-full bg-kertas-gelap" />
+                    </li>
+                  ))}
+                </ol>
+                <div className="absolute inset-0 grid place-items-center bg-kertas/55 p-3 md:p-4">
+                  <div className="max-w-lg rounded-kartu bg-white p-6 text-center shadow-angkat md:p-8">
+                    <span className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-kemasan text-white">
+                      <QrCodeIcon size={24} weight="duotone" aria-hidden="true" />
+                    </span>
+                    <p className="mt-4 text-[20px] font-bold tracking-tight">Terbuka dengan kode di kemasan Patchmos</p>
+                    <p className="mt-2 text-[15px] leading-relaxed text-sekunder">
+                      Skor untuk hari ini dan dua hari ke depan, plus email saat ada laporan warga di wilayahmu atau peringatan dari tim MosqRisk.
+                    </p>
+                    <div className="mt-5 flex flex-wrap justify-center gap-3">
+                      <button type="button" onClick={() => setKlaimBuka(true)} className={kelasTombol("utama")}>
+                        <QrCodeIcon size={20} aria-hidden="true" />
+                        Masukkan kode
+                      </button>
+                      <Link href="/checkout" className={kelasTombol("garis")}>
+                        Beli Patchmos
+                      </Link>
+                    </div>
+                  </div>
                 </div>
-              </>
+              </div>
             )}
           </div>
-        </div>
-      )}
+        </section>
 
-      {/* Premium Alert Modal */}
-      {isPremiumAlertOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm transition-opacity p-4" onClick={() => setIsPremiumAlertOpen(false)}>
-          <div className="bg-surface w-full max-w-sm rounded-[24px] shadow-2xl p-6 text-center animate-in zoom-in duration-300" onClick={e => e.stopPropagation()}>
-            <div className="w-16 h-16 bg-[#EAC775]/20 rounded-full flex items-center justify-center mx-auto mb-4">
-              <span className="material-symbols-outlined text-4xl text-[#EAC775]">workspace_premium</span>
+        {/* Notifikasi email (Premium) */}
+        {premium && (
+          <section aria-labelledby="judul-notifikasi" className="pb-12 md:pb-16">
+            <div className="wadah">
+              <div className="grid gap-8 rounded-media bg-white p-6 shadow-tipis md:p-10 lg:grid-cols-12">
+                <div className="lg:col-span-5">
+                  <span className="grid h-12 w-12 place-items-center rounded-full bg-kertas text-kemasan">
+                    <BellRingingIcon size={24} weight="duotone" aria-hidden="true" />
+                  </span>
+                  <h2 id="judul-notifikasi" className="judul-3 mt-4">
+                    Notifikasi email
+                  </h2>
+                  <p className="teks-isi mt-3 text-sekunder">
+                    Email dikirim saat ada laporan warga di wilayah langgananmu, atau saat tim MosqRisk mengirim peringatan. Tidak ada peringatan
+                    otomatis dari perubahan skor.
+                  </p>
+                </div>
+                <div className="lg:col-span-6 lg:col-start-7">
+                  {langganan ? (
+                    <>
+                      <p className="flex items-center gap-2 text-[17px] font-bold text-risiko-rendah">
+                        <BellRingingIcon size={22} weight="fill" aria-hidden="true" />
+                        Notifikasi aktif
+                      </p>
+                      <dl className="mt-4 divide-y divide-garis rounded-kontrol bg-kertas px-4 text-[15px]">
+                        <div className="grid grid-cols-[6.5rem_1fr] gap-3 py-3">
+                          <dt className="text-sekunder">Email</dt>
+                          <dd className="break-all font-medium">{langganan.email}</dd>
+                        </div>
+                        <div className="grid grid-cols-[6.5rem_1fr] gap-3 py-3">
+                          <dt className="text-sekunder">Wilayah</dt>
+                          <dd className="font-medium">{rapikanNama(langganan.lokasi) || "–"}</dd>
+                        </div>
+                      </dl>
+                      <div className="mt-5 flex flex-wrap gap-3">
+                        {lokasiBeda && user?.email && (
+                          <button type="button" onClick={() => void daftarkan()} disabled={mengirim} className={kelasTombol("utama", "sm")}>
+                            {mengirim ? "Memindahkan…" : `Pindahkan ke ${namaLokasi}`}
+                          </button>
+                        )}
+                        {user && (
+                          <button type="button" onClick={() => void keluar()} className={kelasTombol("garis", "sm")}>
+                            Keluar dari akun Google
+                          </button>
+                        )}
+                      </div>
+                      {lokasiBeda && !user && (
+                        <div className="mt-4">
+                          <p className="text-[14px] text-sekunder">Untuk memindahkan notifikasi ke {namaLokasi}, masuk lagi dengan Google.</p>
+                          <button type="button" onClick={() => void masukGoogle()} className={kelasTombol("garis", "sm", "mt-3")}>
+                            <GoogleLogoIcon size={18} aria-hidden="true" />
+                            Masuk dengan Google
+                          </button>
+                        </div>
+                      )}
+                      <p className="keterangan mt-4">Keluar dari akun tidak menghentikan email. Untuk berhenti, balas email MosqRisk dengan kata BERHENTI.</p>
+                    </>
+                  ) : user?.email ? (
+                    <>
+                      <p className="text-[16px] leading-relaxed">
+                        Kirim notifikasi untuk <strong>{namaLokasi}</strong> ke <strong className="break-all">{user.email}</strong>?
+                      </p>
+                      <div className="mt-5 flex flex-wrap gap-3">
+                        <button type="button" onClick={() => void daftarkan()} disabled={mengirim} className={kelasTombol("utama")}>
+                          {mengirim ? "Mendaftarkan…" : "Aktifkan notifikasi email"}
+                        </button>
+                        <button type="button" onClick={() => void keluar()} className={kelasTombol("garis")}>
+                          Pakai akun lain
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-[16px] leading-relaxed">Masuk dengan akun Google untuk memakai alamat emailmu.</p>
+                      <button type="button" onClick={() => void masukGoogle()} className={kelasTombol("garis", "md", "mt-5")}>
+                        <GoogleLogoIcon size={20} aria-hidden="true" />
+                        Masuk dengan Google
+                      </button>
+                    </>
+                  )}
+                  {pesanLangganan && (
+                    <Catatan nada={pesanLangganan.nada} className="mt-5">
+                      {pesanLangganan.teks}
+                    </Catatan>
+                  )}
+                  <p className="keterangan mt-4">
+                    Email dan wilayah disimpan untuk mengirim notifikasi.{" "}
+                    <Link href="/privasi" className="tautan">
+                      Kebijakan privasi
+                    </Link>
+                  </p>
+                </div>
+              </div>
             </div>
-            <h3 className="text-xl font-bold text-[#1A3626] mb-2">Fitur Khusus Premium</h3>
-            <p className="text-sm text-gray-500 mb-6">
-              Notifikasi email (laporan warga di wilayahmu & peringatan dari tim) dan prakiraan risiko 3 hari tersedia untuk pengguna Premium. Kode akses Premium ada di kemasan Patchmos Spray.
-            </p>
-            <div className="flex flex-col gap-3">
-              <Link href="/checkout" className="w-full bg-[#1A3626] text-white font-bold py-3 rounded-xl hover:bg-[#0c1f13] transition-all">
-                Beli Patchmos Spray
+          </section>
+        )}
+
+        {/* Dari limbah nilam — fakta 05_FAKTA §2 */}
+        <section className="border-t border-garis bg-white">
+          <div className="wadah flex flex-col gap-4 py-8 md:flex-row md:items-center md:py-10">
+            <Image src="/foto/nilam-racik.webp" alt="" width={600} height={896} sizes="64px" className="h-16 w-16 shrink-0 rounded-full object-cover" />
+            <p className="max-w-[80ch] text-[15px] leading-relaxed text-sekunder">
+              Penyulingan nilam hanya menghasilkan sekitar 1,5–3% minyak atsiri; lebih dari 95% sisanya limbah padat yang umumnya belum dimanfaatkan
+              (Indriani dkk., 2025). Patchmos memakai ampas itulah sebagai sumber bahan aktif.{" "}
+              <Link href="/edukasi#nilam" className="tautan font-semibold text-tinta">
+                Tentang nilam dan ampasnya
               </Link>
-              <button onClick={() => setIsPremiumAlertOpen(false)} className="w-full bg-gray-100 text-gray-600 font-bold py-3 rounded-xl hover:bg-gray-200 transition-all">
-                Tutup
-              </button>
-            </div>
+            </p>
           </div>
-        </div>
-      )}
-
-      {/* Footer global */}
+        </section>
+      </main>
       <Footer />
+      <ClaimModal isOpen={klaimBuka} onClose={() => setKlaimBuka(false)} />
+    </>
+  );
+}
 
-    </div>
+// Kartu satu hari prakiraan (Premium): ikon cuaca dominan, rentang suhu, hujan, skor + kategori.
+function KartuHari({ d, hariIni, urutan }: { d: HariTren; hariIni: boolean; urutan: number }) {
+  const st: StatusRisiko = d.risk_status ?? (d.risk_score >= 75 ? "TINGGI" : d.risk_score >= 50 ? "SEDANG" : "RENDAH");
+  const kat = KATEGORI[st];
+  const h = fmtHari(d.date);
+  const sebagian = d.records !== undefined && d.records < 8;
+  return (
+    <li className="masuk rounded-media bg-white p-6 shadow-tipis" style={{ "--tunda": `${urutan * 110}ms` } as React.CSSProperties}>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-[17px] font-bold tracking-tight">{hariIni ? "Hari ini" : h?.hari ?? d.day}</p>
+          {h && <p className="text-[14px] text-sekunder">{h.tanggal}</p>}
+        </div>
+        <span className="grid h-12 w-12 place-items-center rounded-full bg-kertas text-kemasan" title={d.weather_desc ?? undefined}>
+          <IkonCuaca desc={d.weather_desc} size={26} />
+        </span>
+      </div>
+      <div className="mt-5 flex items-end gap-3">
+        <p className="angka text-[56px] font-extrabold leading-[0.85] tracking-[-0.05em]">{d.risk_score}</p>
+        <p className="mb-1 rounded-full px-3 py-1 text-[13px] font-bold" style={{ color: kat.warna, background: kat.latar }}>
+          {kat.label}
+        </p>
+      </div>
+      <div aria-hidden="true" className="mt-4 h-2 overflow-hidden rounded-full bg-kertas-gelap">
+        <div className="h-full rounded-full" style={{ width: `${d.risk_score}%`, background: kat.isi }} />
+      </div>
+      <dl className="mt-5 grid grid-cols-2 gap-3 text-[14px]">
+        <div className="flex items-center gap-2">
+          <ThermometerSimpleIcon size={18} weight="duotone" aria-hidden="true" className="text-kemasan" />
+          <dt className="sr-only">Suhu</dt>
+          <dd className="angka">
+            {d.temperature_min != null && d.temperature_max != null ? `${fmtAngka(d.temperature_min)}–${fmtAngka(d.temperature_max)}°C` : "–"}
+          </dd>
+        </div>
+        <div className="flex items-center gap-2">
+          <CloudRainIcon size={18} weight="duotone" aria-hidden="true" className="text-kemasan" />
+          <dt className="sr-only">Hujan</dt>
+          <dd className="angka">{d.precipitation_mm != null ? `${fmtAngka(d.precipitation_mm)} mm` : "–"}</dd>
+        </div>
+      </dl>
+      {sebagian && (
+        <p className="keterangan mt-4">
+          Dari {d.records} prakiraan per 3 jam; {hariIni ? "sisa hari ini" : "BMKG belum merilis prakiraan lengkap untuk hari itu"}.
+        </p>
+      )}
+    </li>
   );
 }

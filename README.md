@@ -11,20 +11,25 @@
 ## 🌟 Fitur Utama
 
 ### 1. Beranda (`/`)
-- Landing page produk Patchmos Spray dan MosqRisk.
-- Akses cepat ke fitur klaim kode premium via modal Scan QR / Input Kode.
-- Ringkasan hasil uji persepsi pengguna (10 responden, diberi label "uji persepsi, bukan uji klinis") dan CTA menuju halaman pembelian.
+- Produk + proposisi nilai, masalah DBD (data kasus 2025, bersumber), **skor risiko live** dari BMKG (lokasi terakhir dari `/pantau`, bawaan Kota Banda Aceh), bukti (uji persepsi vs uji lab direncanakan), rantai nilam, klaim kode kemasan, cuplikan tim.
 - Beranda tidak menampilkan statistik database. Endpoint `/api/stats` mengembalikan jumlah laporan & pelanggan (angka asli) bila nanti ingin ditampilkan.
 
+### 1b. Tim (`/tim`)
+- Anggota & peran (05_FAKTA §1), cara Patchmos dibuat (tahap nyata), dokumentasi produksi, hasil uji, kontak.
+- Foto otomatis dipakai bila ada di `frontend/public/tim/<nama>.jpg` (nama berkas di `frontend/lib/tim.ts`) dan `frontend/public/tim/produksi/*.jpg`; kalau belum ada tampil "Foto menyusul".
+
 ### 2. Peta Pantauan (`/pantau`)
-- **Auto-Detect GPS**: Secara otomatis mendeteksi lokasi pengguna via Geolocation API + Reverse Geocoding (Nominatim OSM).
+- **Lokasi**: tombol "Pakai lokasiku" (Geolocation API + reverse geocoding Nominatim OSM); otomatis hanya bila izin lokasi sudah pernah diberikan. Wilayah terakhir disimpan di browser.
 - **Pemilihan Manual**: Fallback dropdown Provinsi → Kabupaten/Kota menggunakan API Wilayah Indonesia (Emsifa).
-- **Skor Risiko (Model Risiko MosqRisk)**: formula berbobot dari prakiraan cuaca BMKG — suhu (40%), curah hujan harian (35%), kelembapan (25%). Laporan warga **tidak** memengaruhi skor.
-- **Fitur Premium** (blur-lock untuk non-premium):
-  - Prakiraan risiko 3 hari (hari ini + 2 hari) dari data BMKG (Recharts).
-  - Notifikasi email untuk wilayah yang dipilih.
+- **Skor Risiko (Model Risiko MosqRisk v4)**: indeks kesesuaian cuaca = 100 × S_suhu × S_kelembapan × S_hujan dari rata-rata prakiraan BMKG satu hari. S_suhu = kurva angka penularan R0 *Ae. aegypti* (Mordecai 2017, parameter S2 Text Tabel B); S_kelembapan & S_hujan = pengali 0–1 (asumsi tim; arah dari Schmidt 2018, kategori hujan BMKG, Benedum 2018). Parameter di `backend/rumus_risiko.json`. Laporan warga **tidak** memengaruhi skor.
+- **Indikator risiko**: gauge 0–100 (ambang 50/75), pengali 0–1 per faktor (`risk_factors` dari API), cuaca terdekat, tanggal & titik prakiraan BMKG.
+- **Checklist pencegahan 3M Plus** per hari (tersimpan di browser).
+- **Fitur Premium** (terkunci untuk non-premium, dengan ajakan klaim/beli):
+  - Prakiraan risiko 3 hari (hari ini + 2 hari) dari data BMKG.
+  - Notifikasi email untuk wilayah yang dipilih (pindah wilayah notifikasi hanya lewat tombol).
 - **Autentikasi Google OAuth** (via Supabase Auth) untuk berlangganan notifikasi email (dikirim saat ada laporan warga di wilayah itu atau saat admin mengirim peringatan).
 - Rekomendasi tindakan kesehatan masyarakat berdasarkan tingkat risiko.
+- Edukasi (`/edukasi`): siklus hidup *Aedes* interaktif, 3M Plus, **simulator rumus** (geser suhu/kelembapan/hujan), tren skor 12 bulan.
 
 ### 3. Lapor Warga (`/lapor`)
 - Sistem urun daya (*crowdsourcing*) untuk melaporkan temuan sarang jentik atau kasus DBD.
@@ -33,7 +38,9 @@
 - Laporan disimpan ke Supabase dan diteruskan lewat email ke pelanggan notifikasi di wilayah yang sama. Nama/kontak pelapor tidak diminta.
 
 ### 4. Checkout & Pembayaran (`/checkout`)
-- Harga **Rp20.000/botol (SEMENTARA)**, satu konstanta `HARGA_PER_BOTOL` di `backend/main.py`; frontend membacanya lewat `GET /api/produk`. Tanpa paket bundling: total = jumlah × harga (stepper 1–20 botol).
+- Harga **Rp20.000/botol (SEMENTARA)**, satu sumber `backend/produk.json` (dibaca backend untuk menagih dan `next.config.ts` saat build, jadi harga tetap tampil walau backend mati). Tanpa paket bundling: total = jumlah × harga + ongkir (stepper 1–20 botol).
+- Pengiriman: diantar tim (Banda Aceh & Aceh Besar) atau ambil sendiri (sekitar kampus USK) — ongkir di `produk.json` (sementara Rp0); alamat hanya wajib untuk diantar.
+- Pembeli yang kembali dari aplikasi e-wallet (`callbacks.finish` Midtrans) mendarat di `/checkout?order_id=…` dan status pesanannya dicek otomatis.
 - Total dihitung di server; pesanan (nama, HP, alamat, jumlah) dicatat ke tabel `orders` sebelum transaksi **Midtrans Snap** dibuat.
 - Status pembayaran dicek server ke API Midtrans (`/api/payment/status`) dan lewat notifikasi Midtrans (`/api/payment/notification`).
 - Selama `MIDTRANS_IS_PRODUCTION=false`, halaman menampilkan label **mode uji coba** (sandbox, tidak ada uang ditarik).
@@ -43,9 +50,8 @@
 - Validasi kode dilakukan di backend melalui tabel `premium_codes` di Supabase.
 - Status kode berubah menjadi `used` setelah berhasil diklaim.
 
-### 6. Modal Klaim (Beranda)
-- **Scan QR Code** dari kemasan produk menggunakan kamera perangkat (library jsQR).
-- **Input Manual** kode premium (format: `MOSQ-XXXX`).
+### 6. Modal Klaim (Beranda, `/pantau`)
+- **Ketik kode** (bawaan, format `MOSQ-XXXX`), **pindai QR** dengan kamera (`@yudiel/react-qr-scanner`, pesan jelas bila kamera tidak tersedia), atau **unggah foto QR** (jsQR).
 - Status Premium disimpan di `localStorage` browser (keterbatasan yang diketahui — belum divalidasi server).
 
 ### 7. Dashboard Admin (`/admin`)
@@ -70,8 +76,8 @@
 | **React** | 19.2.4 | Client Components |
 | **TypeScript** | ^5 | Type safety |
 | **Tailwind CSS** | v4 | Utility-first styling |
-| **Framer Motion** | ^12.42 | Animasi & transisi halaman |
-| **Recharts** | ^3.9 | Grafik tren cuaca premium |
+| **Phosphor Icons** | ^2.1 | Satu keluarga ikon (`@phosphor-icons/react`) |
+| **Recharts** | ^3.9 | Grafik tren skor risiko 12 bulan (/edukasi) |
 | **Supabase JS** | ^2.110 | Auth (Google OAuth) & realtime |
 | **jsQR** | ^1.4 | Decode QR code dari kamera |
 | **next-pwa** | ^10.2 | Progressive Web App (offline-ready) |
@@ -85,9 +91,9 @@
 | **SMTP (Gmail)** | Email notifikasi & broadcast alert |
 | **BMKG Public API** | Data prakiraan cuaca harian |
 
-### Design System (sedang dirombak)
-- **Jangkar merek**: `#1A3626` (hijau hutan) dan `#EAC775` (emas), dari logo & kemasan.
-- Arahan desain: `docs/expo/02_DESIGN_BRIEF.md` (gaya lama — glassmorphism, gradient overlay, blob buram — dicabut).
+### Design System
+- Aturan: `.claude/skills/mosqrisk-design/SKILL.md` (token, tipografi, radius, foto, gerak, komponen, checklist).
+- v2 "Kebun Nilam Aceh": dasar putih, hijau hutan `#0C2617` & kemasan `#154127`, foil emas `#E4AE3C`; satu keluarga Plus Jakarta Sans; foto Wikimedia Commons berkredit (`/kredit`); motif *pucok reubong* Aceh sebagai ornamen.
 
 ---
 
@@ -98,21 +104,25 @@ mosqrisk-app/
 │
 ├── backend/                     # Python FastAPI Backend
 │   ├── main.py                  # Seluruh endpoint API, logika risiko, email, Midtrans
+│   ├── produk.json              # Satu-satunya sumber nama, harga, batas pesanan, ongkir
+│   ├── rumus_risiko.json        # Satu-satunya sumber parameter rumus risiko (backend + simulator)
 │   ├── requirements.txt         # Dependensi Python
 │   └── qr_codes/                # QR code kemasan (auto-generated, gitignored)
 │
 ├── frontend/                    # Next.js 16 Frontend
 │   ├── app/                     # Halaman (App Router)
-│   │   ├── page.tsx             # Landing page utama
-│   │   ├── pantau/page.tsx      # Dashboard peta risiko & cuaca
+│   │   ├── page.tsx             # Beranda
+│   │   ├── tim/page.tsx         # Tim, proses produksi, hasil uji
+│   │   ├── edukasi/page.tsx     # Edukasi DBD + model risiko + tren 12 bulan
+│   │   ├── pantau/page.tsx      # Skor risiko per wilayah
 │   │   ├── lapor/page.tsx       # Form laporan warga
 │   │   ├── checkout/page.tsx    # Halaman pembelian + Midtrans Snap
 │   │   ├── claim/page.tsx       # Verifikasi kode premium
 │   │   ├── admin/page.tsx       # Dashboard admin
 │   │   ├── privasi/page.tsx     # Kebijakan Privasi
-│   │   ├── layout.tsx           # Root layout (font, metadata)
-│   │   ├── template.tsx         # Page transition wrapper (Framer Motion)
-│   │   └── globals.css          # Global styles & Tailwind config
+│   │   ├── not-found.tsx, error.tsx  # 404 & galat
+│   │   ├── layout.tsx           # Root layout (font, metadata, PWA)
+│   │   └── globals.css          # Token design system & Tailwind v4 theme
 │   │
 │   ├── components/              # Komponen React
 │   │   ├── Navbar.tsx           # Navigasi atas (desktop)
@@ -120,16 +130,16 @@ mosqrisk-app/
 │   │   ├── Footer.tsx           # Footer global
 │   │   ├── ClaimModal.tsx       # Modal scan QR / input kode
 │   │   ├── admin/SalesPanel.tsx # Panel penjualan online + offline di /admin
-│   │   ├── RevealOnScroll.tsx   # Intersection Observer scroll animation
-│   │   └── SlidingAuthCard.tsx  # Komponen auth card (login/signup)
+│   │   ├── ui/                  # Komponen design system (tombol, KartuLabel, Dialog, Catatan, form)
+│   │   └── SkalaRisiko.tsx, RantaiNilam.tsx, PanelKlaim.tsx, …
 │   │
-│   ├── lib/
-│   │   └── supabase.ts          # Inisialisasi Supabase client
+│   ├── lib/                     # supabase, risiko, produk, premium, klaim, tim
 │   │
 │   ├── public/                  # Aset statis
+│   │   ├── brand/               # Logo & render produk asli (jangan diedit)
+│   │   ├── ikon/                # Favicon & ikon PWA
 │   │   ├── regency_to_adm4.json # Mapping kota/kabupaten → kode ADM4 BMKG
-│   │   ├── manifest.json        # PWA manifest
-│   │   └── *.png                # Gambar produk, logo, QRIS
+│   │   └── manifest.json        # PWA manifest
 │   │
 │   └── next.config.ts           # Konfigurasi Next.js + PWA + API rewrites
 │

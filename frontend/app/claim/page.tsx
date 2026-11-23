@@ -1,123 +1,70 @@
-"use client";
-
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import type { Metadata } from "next";
+import { CalendarDotsIcon, EnvelopeSimpleIcon, QrCodeIcon } from "@phosphor-icons/react/ssr";
 import Navbar from "@/components/Navbar";
+import Footer from "@/components/Footer";
+import PanelKlaim from "@/components/PanelKlaim";
+import HeroHalaman from "@/components/ui/HeroHalaman";
+import { bersihkanKode } from "@/lib/klaim";
 
-export default function ClaimPage() {
-  const router = useRouter();
-  const [code, setCode] = useState("");
-  const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
-  const [errorMessage, setErrorMessage] = useState("");
+export const metadata: Metadata = {
+  title: "Aktifkan Premium",
+  description: "Masukkan kode dari kemasan Patchmos untuk membuka prakiraan risiko 3 hari dan notifikasi email MosqRisk.",
+  robots: { index: false },
+};
 
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const urlCode = params.get('code');
-    if (urlCode) {
-      const t = setTimeout(() => setCode(urlCode.toUpperCase()), 0);
-      return () => clearTimeout(t);
-    }
-  }, []);
-
-  const handleClaim = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setStatus("loading");
-    
-    if (!code.trim()) {
-      setStatus("error");
-      setErrorMessage("Kode tidak boleh kosong.");
-      return;
-    }
-
-    try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
-      const res = await fetch(`${API_URL}/api/claim`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: code.trim() })
-      });
-      const data = await res.json();
-      
-      if (data.success) {
-        localStorage.setItem('isPremium', 'true');
-        setStatus("success");
-      } else {
-        setStatus("error");
-        // 422 (format kode tidak valid) tidak membawa "message" → beri pesan yang jelas
-        setErrorMessage(data.message || "Kode tidak valid atau tidak ditemukan.");
-      }
-    } catch {
-      setStatus("error");
-      setErrorMessage("Gagal terhubung ke server.");
-    }
-  };
+// QR di kemasan mengarah ke /claim?code=MOSQ-XXXX — kode diisi otomatis, pengguna tetap menekan
+// tombol (kode sekali pakai; tidak diklaim diam-diam saat halaman dibuka).
+export default async function ClaimPage({ searchParams }: { searchParams: Promise<{ code?: string | string[] }> }) {
+  const { code } = await searchParams;
+  const kodeAwal = bersihkanKode(Array.isArray(code) ? code[0] : code);
 
   return (
-    <div className="min-h-screen bg-[#F4F6F5] font-sans text-gray-800 pb-20">
+    <>
       <Navbar />
-
-      <div className="max-w-md mx-auto pt-40 px-4">
-        <div className="bg-white rounded-[2rem] shadow-xl p-8 border border-gray-100 text-center">
-          <div className="w-20 h-20 bg-[#EAC775]/20 rounded-full flex items-center justify-center mx-auto mb-6">
-            <span className="material-symbols-outlined text-4xl text-[#EAC775]">qr_code_scanner</span>
-          </div>
-          
-          <h1 className="text-2xl font-black text-[#1A3626] mb-2 tracking-tight">Klaim Akses Premium</h1>
-          <p className="text-gray-500 mb-8 text-sm">
-            Masukkan kode unik dari kemasan Patchmos Spray untuk membuka prakiraan risiko 3 hari dan notifikasi email.
-          </p>
-
-          {status === "success" ? (
-            <div className="animate-in zoom-in duration-300">
-              <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-6">
-                <span className="material-symbols-outlined text-green-500 text-3xl mb-2">check_circle</span>
-                <p className="text-green-700 font-bold text-sm">Berhasil! Akses Premium aktif di perangkat ini.</p>
-              </div>
-              <button onClick={() => router.push("/pantau")} className="w-full bg-[#1A3626] text-white font-black py-4 rounded-[1rem] transition-all hover:bg-[#0c1f13] shadow-lg">
-                Buka Peta Pantauan
-              </button>
-            </div>
-          ) : (
-            <form onSubmit={handleClaim}>
-              <div className="mb-6">
-                <input 
-                  type="text" 
-                  value={code}
-                  onChange={(e) => setCode(e.target.value.toUpperCase())}
-                  placeholder="Contoh: MOSQ-X7B9" 
-                  className="w-full bg-gray-50 border border-gray-200 rounded-2xl px-5 py-4 text-center text-lg font-black tracking-widest focus:outline-none focus:border-[#1A3626] focus:ring-4 focus:ring-[#1A3626]/10 uppercase transition-all"
-                  required
-                />
-              </div>
-
-              {status === "error" && (
-                <div className="mb-6 bg-red-50 text-red-600 text-sm font-bold p-3 rounded-lg border border-red-100 flex items-center gap-2 text-left">
-                  <span className="material-symbols-outlined text-[18px]">error</span>
-                  {errorMessage}
-                </div>
+      <main id="konten" className="flex-1 bg-kertas">
+        <HeroHalaman
+          id="judul-klaim"
+          label="Premium MosqRisk"
+          Ikon={QrCodeIcon}
+          judul={
+            <>
+              Aktifkan <span className="teks-foil">Premium</span> MosqRisk
+            </>
+          }
+          pengantar={
+            <>
+              <p>Kode di kemasan Patchmos membuka prakiraan risiko 3 hari dan notifikasi email untuk wilayahmu.</p>
+              {kodeAwal && (
+                <p className="mt-5 rounded-kontrol bg-white/10 px-4 py-3 text-[15px] leading-relaxed text-white">
+                  Kode dari QR sudah terisi. Periksa, lalu tekan <strong>Aktifkan Premium</strong>.
+                </p>
               )}
-
-              <button 
-                type="submit" 
-                disabled={status === "loading"}
-                className="w-full bg-[#EAC775] text-[#1A3626] font-black py-4 rounded-[1rem] transition-all shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-95 disabled:opacity-70 flex justify-center items-center gap-2"
-              >
-                {status === "loading" ? (
-                  <span className="material-symbols-outlined animate-spin">refresh</span>
-                ) : (
-                  <span className="material-symbols-outlined">vpn_key</span>
-                )}
-                Klaim Sekarang
-              </button>
-            </form>
-          )}
-
-        </div>
-        
-        <div className="mt-8 text-center text-xs font-bold text-gray-500 leading-relaxed">
-          Satu kode hanya dapat diklaim satu kali. Status Premium tersimpan di browser yang dipakai saat klaim.
-        </div>
-      </div>
-    </div>
+            </>
+          }
+          aksi={
+            <ul className="space-y-3 text-left">
+              {[
+                { Ikon: CalendarDotsIcon, teks: "Prakiraan risiko untuk hari ini dan dua hari ke depan" },
+                { Ikon: EnvelopeSimpleIcon, teks: "Email saat ada laporan warga di wilayah langgananmu" },
+              ].map(({ Ikon, teks }) => (
+                <li key={teks} className="flex items-center gap-3 text-[15.5px] text-white">
+                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-foil/20 text-foil">
+                    <Ikon size={20} weight="duotone" aria-hidden="true" />
+                  </span>
+                  {teks}
+                </li>
+              ))}
+            </ul>
+          }
+          kanan={
+            <div className="rounded-media bg-white p-5 text-tinta shadow-angkat md:p-9">
+              <PanelKlaim kodeAwal={kodeAwal} />
+            </div>
+          }
+        />
+        <div className="h-10 md:h-16" />
+      </main>
+      <Footer />
+    </>
   );
 }

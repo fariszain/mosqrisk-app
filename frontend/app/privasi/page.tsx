@@ -1,20 +1,22 @@
 import type { Metadata } from "next";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import HeroHalaman from "@/components/ui/HeroHalaman";
+import { ShieldCheckIcon } from "@phosphor-icons/react/ssr";
 
 export const metadata: Metadata = {
-  title: "Kebijakan Privasi — MosqRisk",
+  title: "Kebijakan privasi",
   description: "Data apa yang dikumpulkan website MosqRisk/Patchmos, untuk apa, dan siapa yang bisa melihatnya.",
 };
 
 // Isi halaman ini harus mengikuti perilaku sistem yang sebenarnya. Kalau ada fitur baru
 // yang mengumpulkan data (mis. chatbot), perbarui halaman ini dan tanggal di bawah.
-const DIPERBARUI = "6 November 2026";
+const DIPERBARUI = "7 November 2026";
 
 const bagianData = [
   {
     judul: "Notifikasi email (Peta Pantauan)",
-    isi: "Alamat email dari akun Google yang kamu pakai login, dan wilayah pantauan yang kamu pilih. Dipakai untuk mengirim email saat ada laporan warga di wilayah itu dan saat tim mengirim peringatan. Jika kamu memilih wilayah lain di Peta Pantauan, wilayah langgananmu ikut diperbarui.",
+    isi: "Alamat email dari akun Google yang kamu pakai login, dan wilayah pantauan yang kamu pilih. Dipakai untuk mengirim email saat ada laporan warga di wilayah itu dan saat tim mengirim peringatan. Wilayah langganan hanya berubah saat kamu menekan tombol untuk memindahkannya.",
   },
   {
     judul: "Laporan warga (Lapor Warga)",
@@ -22,7 +24,7 @@ const bagianData = [
   },
   {
     judul: "Pembelian online (Checkout)",
-    isi: "Nama, nomor HP/WhatsApp, alamat pengiriman, jumlah botol, dan total. Dipakai untuk memproses dan mengirim pesanan. Nama dan nomor HP juga dikirim ke Midtrans untuk membuat transaksi pembayaran. Kami tidak menerima atau menyimpan data kartu maupun rekeningmu.",
+    isi: "Nama, nomor HP/WhatsApp, pilihan pengiriman (diantar atau ambil sendiri), alamat pengiriman bila diantar, jumlah botol, dan total. Dipakai untuk memproses dan mengirim pesanan. Nama dan nomor HP juga dikirim ke Midtrans untuk membuat transaksi pembayaran. Kami tidak menerima atau menyimpan data kartu maupun rekeningmu.",
   },
   {
     judul: "Penjualan offline",
@@ -34,11 +36,11 @@ const bagianData = [
   },
   {
     judul: "Lokasi perangkat",
-    isi: "Hanya jika kamu mengizinkan. Koordinat dipakai di browser untuk mencari nama wilayah lewat OpenStreetMap Nominatim. Di halaman Edukasi, koordinat yang dibulatkan dikirim ke server kami lalu diteruskan ke Open-Meteo untuk mengambil data cuaca historis. Koordinat tidak disimpan di database kecuali kamu mengirimkannya sebagai lokasi laporan atau alamat pengiriman.",
+    isi: "Hanya saat kamu menekan tombol \"Pakai lokasiku\" atau \"Isi dari lokasi saya\" dan mengizinkannya (di Peta Pantauan, lokasi juga dibaca otomatis bila izinnya sudah pernah kamu berikan). Koordinat dipakai di browser untuk mencari nama wilayah lewat OpenStreetMap Nominatim. Di halaman Edukasi, koordinat yang dibulatkan dikirim ke server kami lalu diteruskan ke Open-Meteo untuk mengambil data cuaca historis. Koordinat tidak disimpan di database kecuali kamu mengirimkannya sebagai lokasi laporan atau alamat pengiriman.",
   },
   {
     judul: "Data di browser-mu",
-    isi: "Status Premium, email dan wilayah langganan, koordinat terakhir halaman Edukasi, serta sesi login Google (dari Supabase Auth, berisi email dan nama akunmu) disimpan di localStorage browser-mu. Semuanya bisa dihapus dengan logout dan membersihkan data situs di pengaturan browser.",
+    isi: "Status Premium, wilayah terakhir yang kamu pilih di Peta Pantauan (dipakai juga di Beranda), centang checklist pencegahan per hari, email dan wilayah langganan, koordinat terakhir halaman Edukasi, serta sesi login Google (dari Supabase Auth, berisi email dan nama akunmu) disimpan di localStorage browser-mu. Semuanya bisa dihapus dengan logout dan membersihkan data situs di pengaturan browser.",
   },
 ];
 
@@ -51,78 +53,91 @@ const pihakKetiga = [
   ["Open-Meteo", "data cuaca historis"],
   ["OpenStreetMap Nominatim", "nama lokasi dari koordinat"],
   ["API Wilayah Indonesia (emsifa)", "daftar provinsi dan kabupaten/kota"],
-  ["Google Fonts", "ikon Material Symbols dimuat dari server Google"],
-  ["svgrepo.com", "ikon logo Google pada tombol login"],
 ];
 
 export default function PrivasiPage() {
   return (
-    <div className="min-h-screen bg-background font-sans text-on-surface flex flex-col">
+    <>
       <Navbar />
+      <main id="konten" className="flex-1">
+        <HeroHalaman
+          id="judul-privasi"
+          label={`Diperbarui ${DIPERBARUI}`}
+          Ikon={ShieldCheckIcon}
+          judul={
+            <>
+              Kebijakan <span className="teks-foil">privasi</span>
+            </>
+          }
+          pengantar="MosqRisk dan Patchmos dikembangkan tim mahasiswa Universitas Syiah Kuala dalam Program Pendanaan Internal Kewirausahaan (PIKU). Halaman ini menjelaskan data apa yang dikumpulkan lewat website ini, untuk apa, dan siapa yang bisa melihatnya."
+        />
 
-      <main className="flex-grow w-full max-w-3xl mx-auto px-4 pt-32 md:pt-40 pb-20">
-        <p className="text-sm text-on-surface-variant mb-3">Diperbarui {DIPERBARUI}</p>
-        <h1 className="text-4xl md:text-5xl font-extrabold text-[#1A3626] tracking-tight mb-6">Kebijakan Privasi</h1>
-        <p className="text-[17px] leading-relaxed text-on-surface-variant mb-12">
-          MosqRisk dan Patchmos dikembangkan oleh tim mahasiswa Universitas Syiah Kuala dalam Program Pendanaan Internal
-          Kewirausahaan (PIKU) USK. Halaman ini menjelaskan data apa yang dikumpulkan lewat website ini, untuk apa, dan
-          siapa yang bisa melihatnya.
-        </p>
+        <div className="bg-kertas">
+        <div className="wadah grid gap-10 py-12 md:py-16 lg:grid-cols-12">
+          <section aria-labelledby="data-dikumpulkan" className="lg:col-span-8">
+            <h2 id="data-dikumpulkan" className="judul-3">
+              Data yang kami kumpulkan
+            </h2>
+            <dl className="mt-5 grid gap-3">
+              {bagianData.map((b) => (
+                <div key={b.judul} className="rounded-kartu bg-white p-5 md:p-6">
+                  <dt className="text-[17px] font-bold tracking-tight">{b.judul}</dt>
+                  <dd className="mt-1.5 text-[15.5px] leading-relaxed text-sekunder">{b.isi}</dd>
+                </div>
+              ))}
+            </dl>
+          </section>
 
-        <section className="mb-12" aria-labelledby="data-dikumpulkan">
-          <h2 id="data-dikumpulkan" className="text-2xl font-bold text-[#1A3626] mb-6">Data yang kami kumpulkan</h2>
-          <dl className="flex flex-col gap-6">
-            {bagianData.map((b) => (
-              <div key={b.judul} className="border-l-2 border-[#EAC775] pl-5">
-                <dt className="font-bold text-on-surface mb-1">{b.judul}</dt>
-                <dd className="text-[15px] leading-relaxed text-on-surface-variant">{b.isi}</dd>
-              </div>
-            ))}
-          </dl>
-        </section>
+          <aside aria-labelledby="pihak-ketiga" className="self-start rounded-kartu bg-white p-5 md:p-6 lg:sticky lg:top-24 lg:col-span-4">
+            <h2 id="pihak-ketiga" className="judul-3">
+              Layanan pihak ketiga
+            </h2>
+            <p className="mt-3 text-[15px] leading-relaxed text-sekunder">Website ini memakai layanan berikut. Masing-masing punya kebijakan privasinya sendiri.</p>
+            <ul className="mt-4 border-t border-garis text-[15px]">
+              {pihakKetiga.map(([nama, guna]) => (
+                <li key={nama} className="border-b border-garis py-2.5">
+                  <span className="font-semibold">{nama}</span>
+                  <span className="block text-sekunder">{guna}</span>
+                </li>
+              ))}
+            </ul>
+          </aside>
 
-        <section className="mb-12" aria-labelledby="pihak-ketiga">
-          <h2 id="pihak-ketiga" className="text-2xl font-bold text-[#1A3626] mb-4">Layanan pihak ketiga</h2>
-          <p className="text-[15px] leading-relaxed text-on-surface-variant mb-4">
-            Website ini memakai layanan berikut. Masing-masing punya kebijakan privasinya sendiri.
-          </p>
-          <ul className="flex flex-col gap-2 text-[15px] text-on-surface-variant">
-            {pihakKetiga.map(([nama, guna]) => (
-              <li key={nama}><strong className="text-on-surface">{nama}</strong> — {guna}</li>
-            ))}
-          </ul>
-        </section>
+          <section aria-labelledby="akses-data" className="rounded-kartu bg-white p-5 md:p-8 lg:col-span-8">
+            <h2 id="akses-data" className="judul-3">
+              Siapa yang bisa melihat data
+            </h2>
+            <p className="teks-isi mt-3 text-sekunder">
+              Data di database dikelola tim MosqRisk dan dibuka lewat dasbor admin yang dilindungi PIN. Kami tidak menjual data pribadi.
+            </p>
 
-        <section className="mb-12" aria-labelledby="akses-data">
-          <h2 id="akses-data" className="text-2xl font-bold text-[#1A3626] mb-4">Siapa yang bisa melihat data</h2>
-          <p className="text-[15px] leading-relaxed text-on-surface-variant">
-            Data di database dikelola tim MosqRisk dan dibuka lewat dasbor admin yang dilindungi PIN. Kami tidak menjual
-            data pribadi.
-          </p>
-        </section>
+            <h2 id="hapus-data" className="judul-3 mt-10">
+              Penyimpanan, penghapusan, dan berhenti berlangganan
+            </h2>
+            <p className="teks-isi mt-3 text-sekunder">
+              Data disimpan selama dibutuhkan untuk tujuan di atas. Kamu bisa meminta salinan, perbaikan, atau penghapusan data dengan
+              mengirim email ke{" "}
+              <a href="mailto:mosqrisk.official@gmail.com" className="tautan font-semibold text-tinta">
+                mosqrisk.official@gmail.com
+              </a>
+              .
+            </p>
+            <p className="teks-isi mt-3 text-sekunder">
+              Untuk berhenti menerima notifikasi, balas email dari MosqRisk dengan kata <strong className="text-tinta">BERHENTI</strong>{" "}
+              atau kirim email ke alamat di atas. Tim akan menghapus alamatmu dari daftar pelanggan.
+            </p>
 
-        <section className="mb-12" aria-labelledby="hapus-data">
-          <h2 id="hapus-data" className="text-2xl font-bold text-[#1A3626] mb-4">Penyimpanan, penghapusan, dan berhenti berlangganan</h2>
-          <p className="text-[15px] leading-relaxed text-on-surface-variant mb-4">
-            Data disimpan selama dibutuhkan untuk tujuan di atas. Kamu bisa meminta salinan, perbaikan, atau penghapusan
-            data dengan mengirim email ke{" "}
-            <a href="mailto:mosqrisk.official@gmail.com" className="font-semibold text-[#1A3626] underline underline-offset-2">mosqrisk.official@gmail.com</a>.
-          </p>
-          <p className="text-[15px] leading-relaxed text-on-surface-variant">
-            Untuk berhenti menerima notifikasi, balas email dari MosqRisk dengan kata <strong>BERHENTI</strong> atau kirim
-            email ke alamat di atas. Tim akan menghapus alamatmu dari daftar pelanggan.
-          </p>
-        </section>
-
-        <section aria-labelledby="perubahan">
-          <h2 id="perubahan" className="text-2xl font-bold text-[#1A3626] mb-4">Perubahan kebijakan</h2>
-          <p className="text-[15px] leading-relaxed text-on-surface-variant">
-            Kebijakan ini dapat berubah bila fitur website berubah. Tanggal pembaruan terakhir tercantum di bagian atas halaman.
-          </p>
-        </section>
+            <h2 id="perubahan" className="judul-3 mt-10">
+              Perubahan kebijakan
+            </h2>
+            <p className="teks-isi mt-3 text-sekunder">
+              Kebijakan ini dapat berubah bila fitur website berubah. Tanggal pembaruan terakhir tercantum di bagian atas halaman.
+            </p>
+          </section>
+        </div>
+        </div>
       </main>
-
       <Footer />
-    </div>
+    </>
   );
 }

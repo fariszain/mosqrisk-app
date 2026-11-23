@@ -1,63 +1,306 @@
 @import "tailwindcss";
 
+/* ──────────────────────────────────────────────────────────────────────────
+   Design system MosqRisk / Patchmos — arah "Kebun Nilam Aceh" (v2, 2026-11-07)
+   Aturan lengkap: .claude/skills/mosqrisk-design/SKILL.md
+   Warna merek disampling dari logo & render kemasan; permukaan dasar putih (bukan krem),
+   bidang hijau tua untuk momen penting, foil emas hanya sebagai aksen.
+   Kontras setiap pasangan teks/latar sudah dihitung (≥ 4,5:1).
+   ────────────────────────────────────────────────────────────────────────── */
 :root {
-  --background: #F4F7F4;
-  --foreground: #171717;
-  --primary: #1A3626;
-  --primary-container: #1A3626;
-  --surface: #FFFFFF;
-  --surface-tint: #E2E8E4;
-  --error: #E07A5F;
-  --danger: #E07A5F;
-  --warning: #E9C46A;
-  --on-surface: #171d18;
-  --on-surface-variant: #414844;
-  --surface-container-low: #f0f5ec;
-  --sage-muted: #D8E2DC;
+  /* Merek */
+  --kemasan: #154127;        /* hijau kotak kemasan: tombol utama, judul aksen */
+  --kemasan-gelap: #0F3320;  /* hover tombol utama */
+  --hutan: #0C2617;          /* permukaan paling gelap: panel hero, bagian gelap, footer */
+  --tinta: #0B2A19;          /* teks utama di latar terang (15,6:1 di putih) */
+  --sekunder: #4A5A4F;       /* teks pendukung di latar terang (7,1:1 di putih) */
+  --foil: #E4AE3C;           /* emas foil: aksen & tombol di permukaan gelap. BUKAN teks di latar terang */
+  --foil-terang: #F0C45E;    /* hover tombol foil */
+  --emas-teks: #7A5A12;      /* emas untuk teks di latar terang (6,4:1) */
+  --pucat: #C9D6C4;          /* teks sekunder di permukaan hijau (8,9:1 di hutan) */
+  --pucuk: #B9D99A;          /* hijau pucuk daun: aksen kecil di permukaan gelap */
+  --daun: #516B32;           /* olive daun nilam: garis rantai, bar poin */
+  --ampas: #7A5B3A;          /* cokelat ampas kering — tahap "ampas" */
+
+  /* Permukaan */
+  --kertas: #EDF3EC;         /* kabut daun: bagian terang selang-seling, kartu */
+  --kertas-gelap: #DCE6DA;   /* blok di atas kertas: placeholder, sel tabel */
+  --putih: #FFFFFF;
+  --garis: #D5DFD3;          /* garis dekoratif di latar terang */
+  --garis-kuat: #76857A;     /* batas komponen (input) — 3,9:1 di putih */
+
+  /* Risiko & status — selalu disertai teks, tidak pernah warna saja */
+  --risiko-tinggi: #8E1B1B;
+  --risiko-tinggi-latar: #F1D5D2;
+  --risiko-sedang: #A94E0A;      /* teks (kontras 5,1 di latarnya); 2026-11-09: cokelat #8A5A00 dinilai user terlalu tua */
+  --risiko-sedang-latar: #FFF3E0;
+  /* Warna ISI grafik (gauge, bar) — lebih cerah dari warna teks; selalu didampingi angka & label */
+  --risiko-tinggi-isi: #D9483B;
+  --risiko-sedang-isi: #EE9B2F;
+  --risiko-rendah-isi: #3F8F55;
+  --risiko-rendah: #2E6B3F;
+  --risiko-rendah-latar: #DCE8DE;
+  --galat: #8E1B1B;
+  --peringatan-latar: #F6ECD0;
+  --peringatan-teks: #5C4A12;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-primary: var(--primary);
-  --color-primary-container: var(--primary-container);
-  --color-surface: var(--surface);
-  --color-surface-tint: var(--surface-tint);
-  --color-error: var(--error);
-  --color-danger: var(--danger);
-  --color-warning: var(--warning);
-  --color-on-surface: var(--on-surface);
-  --color-on-surface-variant: var(--on-surface-variant);
-  --color-surface-container-low: var(--surface-container-low);
-  --color-sage-muted: var(--sage-muted);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-kemasan: var(--kemasan);
+  --color-kemasan-gelap: var(--kemasan-gelap);
+  --color-hutan: var(--hutan);
+  --color-tinta: var(--tinta);
+  --color-sekunder: var(--sekunder);
+  --color-foil: var(--foil);
+  --color-foil-terang: var(--foil-terang);
+  --color-emas-teks: var(--emas-teks);
+  --color-pucat: var(--pucat);
+  --color-pucuk: var(--pucuk);
+  --color-daun: var(--daun);
+  --color-ampas: var(--ampas);
+  --color-kertas: var(--kertas);
+  --color-kertas-gelap: var(--kertas-gelap);
+  --color-putih: var(--putih);
+  --color-garis: var(--garis);
+  --color-garis-kuat: var(--garis-kuat);
+  --color-risiko-tinggi: var(--risiko-tinggi);
+  --color-risiko-tinggi-latar: var(--risiko-tinggi-latar);
+  --color-risiko-sedang: var(--risiko-sedang);
+  --color-risiko-sedang-latar: var(--risiko-sedang-latar);
+  --color-risiko-tinggi-isi: var(--risiko-tinggi-isi);
+  --color-risiko-sedang-isi: var(--risiko-sedang-isi);
+  --color-risiko-rendah-isi: var(--risiko-rendah-isi);
+  --color-risiko-rendah: var(--risiko-rendah);
+  --color-risiko-rendah-latar: var(--risiko-rendah-latar);
+  --color-galat: var(--galat);
+  --color-peringatan-latar: var(--peringatan-latar);
+  --color-peringatan-teks: var(--peringatan-teks);
+
+  /* Satu keluarga huruf: Geist (sejak 2026-11-09, pilihan user) untuk judul, teks, dan UI. */
+  --font-sans: var(--font-geist), "Geist", system-ui, sans-serif;
+  --font-display: var(--font-geist), "Geist", system-ui, sans-serif;
+
+  /* Radius berjenjang menurut hierarki — bukan satu radius untuk semua */
+  --radius-media: 28px;      /* foto & panel media besar */
+  --radius-kartu: 20px;      /* kartu & panel konten */
+  --radius-kontrol: 12px;    /* tombol, input, chip persegi */
+
+  /* Bayangan hanya untuk benda yang "melayang" (chip hero, ringkasan sticky, dialog, header saat digulir) */
+  --shadow-angkat: 0 24px 56px -28px rgb(12 38 23 / 0.45), 0 2px 8px -2px rgb(12 38 23 / 0.12);
+  --shadow-tipis: 0 1px 2px rgb(12 38 23 / 0.06), 0 8px 24px -16px rgb(12 38 23 / 0.25);
 }
 
-body {
-  background: var(--background);
-  color: var(--on-surface);
-  font-family: 'Plus Jakarta Sans', Arial, Helvetica, sans-serif;
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    scroll-behavior: smooth;
+    scroll-padding-top: 6rem;
+  }
+
+  body {
+    background: var(--putih);
+    color: var(--tinta);
+    font-family: var(--font-sans);
+    font-size: 1rem;
+    line-height: 1.6;
+    font-feature-settings: "kern", "ss01";
+  }
+
+  ::selection {
+    background: var(--foil);
+    color: var(--tinta);
+  }
+
+  /* Fokus keyboard selalu terlihat. Di permukaan gelap, cincin memakai foil. */
+  :focus-visible {
+    outline: 2px solid var(--tinta);
+    outline-offset: 3px;
+  }
+  .permukaan-gelap :focus-visible {
+    outline-color: var(--foil);
+  }
 }
 
-@keyframes float-up-down {
+@layer components {
+  /* Wadah halaman: lebar maksimum 78rem, gutter 20 px (mobile) / 32 px (≥ 768 px) / 40 px (≥ 1280 px) */
+  .wadah {
+    margin-inline: auto;
+    width: 100%;
+    max-width: 78rem;
+    padding-inline: 1.25rem;
+  }
+  @media (min-width: 768px) {
+    .wadah { padding-inline: 2rem; }
+  }
+  @media (min-width: 1280px) {
+    .wadah { padding-inline: 2.5rem; }
+  }
+
+  /* ── Skala tipografi: satu keluarga, kontras lewat ukuran & berat (cair 390 → 1440 px) ── */
+  .judul-hero {
+    font-weight: 800;
+    font-size: clamp(2.6rem, 1.55rem + 4.3vw, 5.1rem);
+    line-height: 0.98;
+    letter-spacing: -0.045em;
+    text-wrap: balance;
+  }
+  .judul-1 {
+    font-weight: 800;
+    font-size: clamp(2.25rem, 1.5rem + 3vw, 3.9rem);
+    line-height: 1.02;
+    letter-spacing: -0.04em;
+    text-wrap: balance;
+  }
+  .judul-2 {
+    font-weight: 800;
+    font-size: clamp(1.9rem, 1.35rem + 2.1vw, 3.1rem);
+    line-height: 1.06;
+    letter-spacing: -0.035em;
+    text-wrap: balance;
+  }
+  .judul-3 {
+    font-weight: 700;
+    font-size: clamp(1.3rem, 1.15rem + 0.6vw, 1.625rem);
+    line-height: 1.2;
+    letter-spacing: -0.02em;
+    text-wrap: balance;
+  }
+  .pengantar {
+    font-size: clamp(1.0625rem, 0.97rem + 0.45vw, 1.3rem);
+    line-height: 1.55;
+    color: var(--sekunder);
+    text-wrap: pretty;
+  }
+  .permukaan-gelap .pengantar {
+    color: var(--pucat);
+  }
+  .teks-isi {
+    font-size: 1rem;
+    line-height: 1.68;
+    text-wrap: pretty;
+  }
+  @media (min-width: 768px) {
+    .teks-isi { font-size: 1.0625rem; }
+  }
+  .keterangan {
+    font-size: 0.8125rem;
+    line-height: 1.5;
+    color: var(--sekunder);
+  }
+  .permukaan-gelap .keterangan {
+    color: var(--pucat);
+  }
+  .angka {
+    font-variant-numeric: tabular-nums lining-nums;
+  }
+
+  /* Tautan di dalam teks: garis bawah tipis (warna teks tetap tinta) */
+  .tautan {
+    text-decoration-line: underline;
+    text-decoration-thickness: 1.5px;
+    text-underline-offset: 4px;
+    text-decoration-color: color-mix(in srgb, currentColor 40%, transparent);
+    transition: text-decoration-color 150ms ease;
+  }
+  .tautan:hover {
+    text-decoration-color: currentColor;
+  }
+  .permukaan-gelap .tautan {
+    text-decoration-color: color-mix(in srgb, var(--foil) 80%, transparent);
+  }
+
+  /* Signature: motif pucok reubong (rebung) — ornamen segitiga khas Aceh pada songket & ukiran rumoh Aceh.
+     Dipakai hemat: tepi atas footer dan tepi panel produk. */
+  .ornamen-reubong {
+    height: 14px;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='26' height='14' viewBox='0 0 26 14'><path d='M1 13.25 13 1.2l12 12.05' fill='none' stroke='%23E4AE3C' stroke-width='1.3'/><path d='M7.5 13.25 13 7.2l5.5 6.05Z' fill='%23E4AE3C'/></svg>");
+    background-repeat: repeat-x;
+    background-position: left bottom;
+    border-bottom: 1.5px solid var(--foil);
+  }
+
+  /* Gradasi gelap di atas foto supaya teks putih terbaca (dipakai di bagian berlatar foto) */
+  .lapis-foto {
+    background: linear-gradient(90deg, rgb(12 38 23 / 0.92) 0%, rgb(12 38 23 / 0.72) 45%, rgb(12 38 23 / 0.25) 100%);
+  }
+  @media (max-width: 767px) {
+    .lapis-foto {
+      background: linear-gradient(180deg, rgb(12 38 23 / 0.55) 0%, rgb(12 38 23 / 0.9) 55%, rgb(12 38 23 / 0.96) 100%);
+    }
+  }
+
+  /* ── Gerak ──
+     1) Satu urutan masuk di hero (judul → aksi → produk → chip risiko), sekali saat halaman dibuka.
+     2) Gerak yang menjawab aksi pengguna (tab, akordeon, pilihan, dialog).
+     3) Angka & garis yang "terisi" sekali saat terlihat (skor risiko, statistik, rantai nilam). */
+  .masuk {
+    animation: masuk 0.85s cubic-bezier(0.16, 0.84, 0.3, 1) both;
+    animation-delay: var(--tunda, 0ms);
+  }
+  .masuk-pudar {
+    animation: pudar 0.6s ease-out both;
+    animation-delay: var(--tunda, 0ms);
+  }
+  .melayang-pelan {
+    animation: melayang 7s ease-in-out infinite;
+  }
+  /* Teks emas foil bergradasi — hanya untuk frasa kunci judul hero Beranda (gaya web lama yang disukai user). */
+  .teks-foil {
+    background: linear-gradient(100deg, var(--foil-terang) 0%, var(--foil) 60%, var(--foil) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  /* Angka besar 01/02/03 bergradasi di kartu langkah Beranda */
+  .angka-langkah {
+    background: linear-gradient(180deg, var(--daun) 0%, var(--pucuk) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .ganti-isi {
+    animation: ganti 0.35s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  }
+  /* Centang yang tergambar (konfirmasi berhasil) — dipakai CentangBerhasil.tsx */
+  .gambar-garis {
+    stroke-dasharray: var(--panjang, 100);
+    stroke-dashoffset: var(--panjang, 100);
+    animation: gambar 0.7s cubic-bezier(0.65, 0, 0.35, 1) forwards;
+    animation-delay: var(--tunda, 0ms);
+  }
+}
+
+@keyframes masuk {
+  from { opacity: 0; transform: translateY(22px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes pudar {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes ganti {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes melayang {
   0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-35px); }
+  50% { transform: translateY(-8px); }
+}
+@keyframes gambar {
+  to { stroke-dashoffset: 0; }
+}
+@keyframes garis-pindai {
+  0%, 100% { top: 12%; }
+  50% { top: 84%; }
 }
 
-.motion-float-fast {
-  animation: float-up-down 4s ease-in-out infinite;
-}
-.motion-float-normal {
-  animation: float-up-down 6s ease-in-out infinite;
-  animation-delay: 1s;
-}
-.motion-float-slow {
-  animation: float-up-down 8s ease-in-out infinite;
-  animation-delay: 2s;
-}
-
-@keyframes scan {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(180px); }
+/* Gerak dikurangi: semua animasi & transisi langsung ke keadaan akhir */
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
